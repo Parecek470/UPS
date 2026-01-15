@@ -206,6 +206,7 @@ bool GameRoom::playerHit(std::shared_ptr<Player> player)
 int GameRoom::calculateHandValue(const std::string &cards) const
 {
     int sum = 0;
+    int aces = 0;
 
     auto cardList = Utils::splitString(cards, ';');
     for (const auto &card : cardList)
@@ -213,7 +214,8 @@ int GameRoom::calculateHandValue(const std::string &cards) const
         std::string rank = card.substr(0, card.size() - 1); // Exclude suit
         if (rank == "A")
         {
-            sum += 11; // Ace can be 1 or 11, simplified here as 11
+            sum += 11;
+            aces++;
         }
         else if (rank == "K" || rank == "Q" || rank == "J")
         {
@@ -223,6 +225,13 @@ int GameRoom::calculateHandValue(const std::string &cards) const
         {
             sum += std::stoi(rank); // Numeric cards are worth their face value
         }
+    }
+
+    // Adjust for Aces
+    while (sum > 21 && aces > 0)
+    {
+        sum -= 10; // Count Ace as 1 instead of 11
+        aces--;
     }
 
     return sum;
@@ -384,7 +393,17 @@ void GameRoom::handleStateBetting(std::shared_ptr<Player> player, const Message 
         // Example: Process bet amount from msg.args
         if (msg.args.size() >= 1)
         {
-            int betAmount = std::stoi(msg.args[0]);
+            int betAmount = 0;
+            try
+            {
+                betAmount = std::stoi(msg.args[0]);
+            }
+            catch (const std::exception &e)
+            {
+                server->sendMessage(player->getFd(), "NACK__BT", "Invalid bet amount");
+                return;
+            }
+
             if (placeBet(player, betAmount))
             {
                 Logger::info("GameRoom: Player " + player->getNickname() + " placed a bet of " + std::to_string(betAmount) + " in room " + std::to_string(roomId));
@@ -420,6 +439,12 @@ void GameRoom::handleStatePlaying(std::shared_ptr<Player> player, const Message 
             Logger::info("GameRoom: Player " + player->getNickname() + " busted in room " + std::to_string(roomId));
             playerStand(player); // Automatically stand if busted
             server->sendMessage(player->getFd(), "BUST____", " ");
+        }
+        else if (calculateHandValue(player->getPlayerCards()) == 21)
+        {
+            Logger::info("GameRoom: Player " + player->getNickname() + " hit 21 in room " + std::to_string(roomId));
+            playerStand(player); // Automatically stand if hit 21
+            server->sendMessage(player->getFd(), "HIT21___", " ");
         }
         return;
     }

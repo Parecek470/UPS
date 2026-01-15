@@ -123,8 +123,8 @@ class ChatGUI:
 
     def _on_login_click(self):
         nick = self.ent_nick.get().strip()
-        if not nick or len(nick) < 3 or len(nick) > 16:
-            messagebox.showwarning("Input", "Nickname must be between 3 and 16 characters.")
+        if not nick or len(nick) < 3 or len(nick) > 10:
+            messagebox.showwarning("Input", "Nickname must be between 3 and 10 characters.")
             return
         elif ";" in nick or ":" in nick:
             messagebox.showwarning("Input", "Nickname cannot contain ';' or ':'.")
@@ -224,11 +224,15 @@ class ChatGUI:
             self.frames["GameRoom"].update_game_state(args)
         elif cmd == "ROMSTAUP":
             # room status update
-            if not self.frames["GameRoom"].player_ready_status:
+            if self.frames["GameRoom"].ready_modal is not None:
+                self.frames["GameRoom"]._update_players_list(args)
+            elif self.frames["GameRoom"].placed_bet and self.frames["GameRoom"].waiting_for_cards:
+                self.frames["GameRoom"]._update_players_card(args)
+            elif not self.frames["GameRoom"].player_ready_status and self.frames["GameRoom"].ready_modal is None:
                 self.frames["GameRoom"].open_ready_modal()
                 self.frames["GameRoom"]._update_players_list(args)
             else:
-                self.frames["GameRoom"]._update_players_card(args)
+                print("ROMSTAUP: No action taken.")
         elif cmd == "ACK_LVRO":
             self.handle_leave_room()
             self.show_frame("Lobby")
@@ -550,6 +554,8 @@ class GameRoom(tk.Frame):
                     bet=bet_val,
                     status="Waiting"
                 )
+                if nick == self.controller.player_info.raw_nick:
+                    self.player_ready_status = (status == '1')
 
     def update_game_state(self, state_str):
         """
