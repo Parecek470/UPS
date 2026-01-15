@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug (GDB)",
+            "type": "cppdbg",
+            "request": "launch",
+            // This points to the executable created by your Makefile
+            "program": "${workspaceFolder}/blackjack_server",
+            // No command line arguments for the program
+            "args": [
+                "10000",
+                "6"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            // IMPORTANT: This triggers the task we defined in Step 1 before debugging
+            "preLaunchTask": "build project"
+        }
+    ]
+}
