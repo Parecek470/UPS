@@ -3,12 +3,12 @@
 
 #include <string>
 #include <vector>
+#include <chrono>
 
 enum class PlayerState
 {
     LOBBY,
     IN_GAMEROOM,
-    TMP_DISCONNECTED,
     DISCONNECTED
 };
 
@@ -22,6 +22,7 @@ public:
         resetGameAttributes();
     }
 
+    void setFd(int socketFd) { fd = socketFd; }
     int getFd() const { return fd; }
 
     void setNickname(const std::string &n) { nickname = n; }
@@ -72,10 +73,24 @@ public:
         playerCards.clear();
     }
 
+    void refreshLastActivity()
+    {
+        lastActivity = std::chrono::steady_clock::now();
+    }
+
+    long getSecondsSinceLastActivity() const
+    {
+        auto now = std::chrono::steady_clock::now();
+        return std::chrono::duration_cast<std::chrono::seconds>(now - lastActivity).count();
+    }
+
+    bool isOffline() const { return getSecondsSinceLastActivity() > 10; }
+
 private:
     int fd;
     std::string nickname;
     PlayerState state;
+    std::chrono::steady_clock::time_point lastActivity;
     int invalidMsgCount;
     int roomId;
     int credits;

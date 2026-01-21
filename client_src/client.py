@@ -2,6 +2,7 @@ import sys
 import os
 import queue
 import tkinter as tk
+import time
 from tkinter import messagebox
 from enum import Enum
 from PIL import Image, ImageTk
@@ -19,10 +20,6 @@ class GameState(Enum):
 
 GameState = Enum('GameState', [('Waiting for players', 0), ('Betting phase', 1), ('Playing', 2), ('Evaluating results', 3)])
 
-# ==============================================================================
-# 3) GUI LAYER
-# Responsibilities: Tkinter interface, Event Consumer, No freezing
-# ==============================================================================
 class ChatGUI:
     def __init__(self, root, host, port):
         self.root = root
@@ -81,14 +78,18 @@ class ChatGUI:
         self._start_network()
         # Start GUI Queue Consumer
         self.root.after(100, self._process_gui_queue)
+        # connection monitoring
+        self.root.after(2000, self._monitor_connection)
 
-        self.open_login_modal()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close_app)
 
     def open_login_modal(self):
         #create a modal dialog for nickname input, blocking user interaction with main window
         if self.login_modal:
             return # Already open
+
+        if self.player_info.raw_nick != "":
+            self.protocol.send_nickname_request(self.player_info.raw_nick)
 
         self.login_modal = tk.Toplevel(self.root)
         self.login_modal.title("Login")
@@ -184,25 +185,69 @@ class ChatGUI:
         finally:
             # Reschedule check
             self.root.after(100, self._process_gui_queue)
-            
+
+    def _monitor_connection(self):
+        """Periodically check network connection status."""
+        self._check_connection_status()
+        self.root.after(2000, self._monitor_connection)
+        
+    def _check_connection_status(self):
+        """Check if network thread has died and attempt reconnection if needed."""
+        if hasattr(self, 'network') and self.network:
+            # Check if network thread is still running
+            if not self.network._running and self.network._thread:
+                # Only reconnect if thread has actually stopped
+                if not self.network._thread.is_alive():
+                    print("DEBUG: Network thread stopped, attempting reconnection...")
+                    
+                    # Create new network connection
+                    new_network = NetworkClient(
+                        host=self.host,
+                        port=self.port,
+                        incoming_callback=self.protocol.on_network_message,
+                        tick_callback=self.protocol.on_tick
+                    )
+                    
+                    success, msg = new_network.start()
+                    if success:
+                        self.protocol.set_network(new_network)
+                        self.network = new_network  # Update our reference
+                        # Update GUI to show we're back online
+                    else:
+                        print(f"DEBUG: Reconnection failed: {msg}")
 
     def process_gui_message(self, cmd, args):
         """Thread-safe update of text widget."""
         print(f"Command: {cmd}, Args: {args}")
-        if cmd == "ACK__NIC":
+        if cmd == "REQ_NICK":
+            self.player_info.update_data(status="Online")
+            self.open_login_modal()
+        elif cmd == "ACK__NIC":
             if self.login_modal:
                 self.login_modal.destroy()
                 self.login_modal = None
             self.show_frame("Lobby")
             self.player_info.update_data(nickname=args.split(";",1)[0], credits=args.split(";",1)[1], status="Online")
             self.frames["Lobby"].show_loading()
+        elif cmd == "ACK__REC":
+            if args.split(";")[-1] == "-1":
+                if self.login_modal:
+                    self.login_modal.destroy()
+                    self.login_modal = None
+                self.show_frame("Lobby")
+                self.player_info.update_data(nickname=args.split(";",1)[0], credits=args.split(";",1)[1], status="Online")
+                self.frames["Lobby"].show_loading()
+            else:
+                self.player_info.update_data(nickname=args.split(";",1)[0], credits=args.split(";",1)[1], status="Online")
+                self.show_frame("GameRoom")
+                self.protocol.send_gamestate_request()
         elif cmd == "NACK_NIC":
             messagebox.showwarning("Login Failed", f"Nickname rejected: {args}")
             self.frames["Lobby"].login_modal.errwarning_label.config(text=f"Nickname already in use: {args}")
         elif cmd == "ACK__JON":
             self.handle_join_room(args)
         elif cmd == "NACK_JON":
-            messagebox.showwarning("Join Room Failed", f"Failed to join room: {args}")
+            messagebox.showwarning("Join Room Failed", f"Failed to join room: {'Not enough credits' if self.player_info.raw_credits == 0 else args}")
         elif cmd == "LBBYINFO":
             # update players online 
             online_count, room_count, room_data = args.split(":", 2)
@@ -241,6 +286,12 @@ class ChatGUI:
         elif cmd == "ACK__PAG":
             self.handle_leave_room()
             self.handle_join_room(args)
+        elif cmd == "NACK_PAG":
+            self.handle_leave_room()
+            self.show_frame("Lobby")
+            messagebox.showwarning("Play Again Failed", f"Failed to play again: {args}")
+        elif cmd == "mark_offline":
+            self.player_info.update_data(status="Offline")
             
             
             
@@ -273,12 +324,12 @@ class PlayerInfo(tk.Frame):
         self.configure(bg="#333", highlightbackground="#555", highlightthickness=2)
 
         # --- NEW: Store raw data variables ---
-        self.raw_nick = "???"
+        self.raw_nick = ""
         self.raw_credits = 0
         self.raw_status = "Offline"
 
         # Labels (Display)
-        self.lbl_nick = tk.Label(self, text=f"Nick: {self.raw_nick}", bg="#333", fg="white", font=("Arial", 10, "bold"))
+        self.lbl_nick = tk.Label(self, text=f"Nick: {"???" if not self.raw_nick else self.raw_nick}", bg="#333", fg="white", font=("Arial", 10, "bold"))
         self.lbl_credits = tk.Label(self, text=f"Credits: {self.raw_credits}", bg="#333", fg="#FFD700", font=("Arial", 10))
         self.lbl_status = tk.Label(self, text=f"Status: {self.raw_status}", bg="#333", fg="#aaa", font=("Arial", 10, "italic"))
 

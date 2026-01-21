@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <queue>
+#include <chrono>
 #include <mutex>
 #include "game/Player.h"
 #include "protocol/Message.h"
@@ -43,6 +44,7 @@ public:
     void handleStateBetting(std::shared_ptr<Player> player, const Message &msg);
     void handleStatePlaying(std::shared_ptr<Player> player, const Message &msg);
     void handleStateRoundEnd(std::shared_ptr<Player> player, const Message &msg);
+    void handleInvalidMessage(std::shared_ptr<Player> player);
 
     bool areAllPlayersReady() const;
     bool placeBet(std::shared_ptr<Player> player, int amount);
@@ -50,6 +52,13 @@ public:
     void update();
     std::string getRoomState() const;
     std::string getGameState() const;
+
+    void startTurnTimer() { playerGotTurnTime = std::chrono::steady_clock::now(); }
+    long getTurnElapsedSeconds() const
+    {
+        auto now = std::chrono::steady_clock::now();
+        return std::chrono::duration_cast<std::chrono::seconds>(now - playerGotTurnTime).count();
+    };
 
     void dealCards();
     std::string getDealerCards() const;
@@ -71,6 +80,7 @@ private:
     GameState gameState;
     std::vector<std::string> dealerCards;
     std::deque<std::shared_ptr<Player>> turnOrder;
+    std::chrono::steady_clock::time_point playerGotTurnTime;
 };
 
 #endif // GAME_ROOM_H

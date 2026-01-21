@@ -37,6 +37,8 @@ void GameRoom::broadcastMessage(const std::string &message, const std::string &a
 {
     for (const auto &player : players)
     {
+        if (player->isOffline())
+            continue;
         server->sendMessage(player->getFd(), message, args);
     }
 }
@@ -90,6 +92,7 @@ void GameRoom::update()
             Logger::info("GameRoom: Room " + std::to_string(roomId) + " transitioning to PLAYING state");
             // Notify players
             dealCards();
+            startTurnTimer();
             broadcastMessage("GAMESTAT", getGameState());
         }
         break;
@@ -107,6 +110,15 @@ void GameRoom::update()
             {
                 server->sendMessage(player->getFd(), "ROUNDEND", getCredits(player));
             }
+        }
+        else if (getTurnElapsedSeconds() >= 30)
+        {
+            // Auto-stand for current player
+            auto currentPlayer = turnOrder.front();
+            Logger::info("GameRoom: Player " + currentPlayer->getNickname() + " timed out in room " + std::to_string(roomId) + ", auto-standing");
+            playerStand(currentPlayer);
+            startTurnTimer(); // Reset timer for next player
+            broadcastMessage("GAMESTAT", getGameState());
         }
         break;
 
@@ -200,6 +212,7 @@ bool GameRoom::playerHit(std::shared_ptr<Player> player)
         return false; // Cannot hit if already 21 or bust
 
     player->addPlayerCard(generateCard());
+    startTurnTimer();
     return true;
 }
 
@@ -246,6 +259,7 @@ void GameRoom::playerStand(std::shared_ptr<Player> player)
     if (turnOrder.front() == player)
     {
         turnOrder.pop_front();
+        startTurnTimer(); // Reset timer for next player
     }
 }
 
@@ -280,6 +294,7 @@ std::string GameRoom::getDealerCards() const
     return cards;
 }
 
+// corection of turn state and creating game state string
 std::string GameRoom::getGameState() const
 {
     std::string state = "D;" + getDealerCards() + ":";
@@ -288,9 +303,11 @@ std::string GameRoom::getGameState() const
         player->setTurn(false);
         if (player == turnOrder.front())
         {
+
             player->setTurn(true);
         }
-        state += "P;" + player->getNickname() + ";" + (player->getTurn() ? "1" : "0") + ";" + player->getPlayerCards() + ":";
+        state += "P;" + player->getNickname() + ";" + (player->isOffline() ? "2" : (player->getTurn() ? "1" : "0")) +
+                 ";" + player->getPlayerCards() + ":";
     }
     return state;
 }
@@ -313,9 +330,8 @@ void GameRoom::removePlayer(std::shared_ptr<Player> player)
     auto it = std::find(players.begin(), players.end(), player);
     if (it != players.end())
     {
-        if (player == turnOrder.front()) // this short fix, does not handle when reconect can happen, now just for happy day
+        if (player == turnOrder.front()) // If the player being removed has the turn, artificially end their turn
         {
-            // If the player being removed has the turn, pop them from the turn order
             playerStand(player);
             broadcastMessage("GAMESTAT", getGameState());
         }
@@ -354,7 +370,8 @@ std::string GameRoom::getRoomState() const
     {
         if (player == nullptr)
             continue;
-        state += "P;" + player->getNickname() + ";" + (player->getReady() ? "1" : "0") + ";BET;" + std::to_string(player->getBetAmount()) + ":";
+        state += "P;" + player->getNickname() + ";" + (player->isOffline() ? "2" : (player->getReady() ? "1" : "0")) +
+                 ";BET;" + std::to_string(player->getBetAmount()) + ":";
     }
 
     return state;
@@ -378,10 +395,21 @@ void GameRoom::handleStateWaitingForPlayers(std::shared_ptr<Player> player, cons
     }
     else if (msg.command == "PAG_____")
     {
+        if (player->getCredits() <= 0)
+        {
+            server->sendMessage(player->getFd(), "NACK_PAG", "Insufficient credits to continue");
+            Logger::info("GameRoom: Player " + player->getNickname() + " cannot prepare for next game due to insufficient credits in room " + std::to_string(roomId));
+            return;
+        }
         Logger::info("GameRoom: Player " + player->getNickname() + " is preparing for next game in room " + std::to_string(roomId));
         update();
         server->sendMessage(player->getFd(), "ACK__PAG", std::to_string(roomId));
         return;
+    }
+    else
+    {
+        handleInvalidMessage(player);
+        server->sendMessage(player->getFd(), "NACK_CMD", "Invalid command during WAITING_FOR_PLAYERS");
     }
 }
 
@@ -416,6 +444,11 @@ void GameRoom::handleStateBetting(std::shared_ptr<Player> player, const Message 
             }
             return;
         }
+    }
+    else
+    {
+        handleInvalidMessage(player);
+        server->sendMessage(player->getFd(), "NACK_CMD", "Invalid command during BETTING");
     }
 }
 
@@ -455,6 +488,11 @@ void GameRoom::handleStatePlaying(std::shared_ptr<Player> player, const Message 
         server->sendMessage(player->getFd(), "ACK_STND", " ");
         return;
     }
+    else
+    {
+        handleInvalidMessage(player);
+        server->sendMessage(player->getFd(), "NACK_CMD", "Invalid command during PLAYING");
+    }
 }
 
 void GameRoom::handleStateRoundEnd(std::shared_ptr<Player> player, const Message &msg)
@@ -462,10 +500,33 @@ void GameRoom::handleStateRoundEnd(std::shared_ptr<Player> player, const Message
     // Handle messages specific to ROUND_END state
     if (msg.command == "PAG_____")
     {
+        if (player->getCredits() <= 0)
+        {
+            server->sendMessage(player->getFd(), "NACK_PAG", "Insufficient credits to continue");
+            Logger::info("GameRoom: Player " + player->getNickname() + " cannot prepare for next game due to insufficient credits in room " + std::to_string(roomId));
+            return;
+        }
         Logger::info("GameRoom: Player " + player->getNickname() + " is preparing for next game in room " + std::to_string(roomId));
         update();
         server->sendMessage(player->getFd(), "ACK__PAG", std::to_string(roomId));
         return;
+    }
+    else
+    {
+        handleInvalidMessage(player);
+        server->sendMessage(player->getFd(), "NACK_CMD", "Invalid command during ROUND_END");
+    }
+}
+
+void GameRoom::handleInvalidMessage(std::shared_ptr<Player> player)
+{
+    player->incrementInvalidMsg();
+    if (player->getInvalidMsgCount() > 5)
+    {
+        Logger::error("GameRoom: Player " + player->getNickname() + " exceeded invalid message limit in room " + std::to_string(roomId));
+        server->sendMessage(player->getFd(), "DISCONNECT", "Too many invalid messages");
+        removePlayer(player);
+        server->lobby.destroyPlayer(player->getFd());
     }
 }
 
@@ -474,8 +535,25 @@ void GameRoom::handle(std::shared_ptr<Player> player, const Message &msg)
     std::lock_guard<std::mutex> lock(roomMutex);
 
     Logger::debug("GameRoom: Handling message " + msg.command + " from player " + player->getNickname() + " in room " + std::to_string(roomId));
-    // Handle game-specific messages here
 
+    // reconnection of offline player
+    if (msg.command == "REC__GAM")
+    {
+        server->sendMessage(player->getFd(), "ACK__REC", "");
+        if (gameState == GameState::PLAYING)
+        {
+            Logger::info("GameRoom: Player " + player->getNickname() + " reconnected during PLAYING state in room " + std::to_string(roomId));
+            server->sendMessage(player->getFd(), "GAMESTAT", getGameState());
+        }
+        else
+        {
+            Logger::info("GameRoom: Player " + player->getNickname() + " reconnected during BETTING state in room " + std::to_string(roomId));
+            server->sendMessage(player->getFd(), "ROMSTAUP", getRoomState());
+        }
+        return;
+    }
+
+    // Handle game-specific messages here
     switch (gameState)
     {
     case GameState::WAITING_FOR_PLAYERS:

@@ -8,6 +8,7 @@ Lobby::Lobby(TcpServer &srv) : server(srv) {}
 void Lobby::addPlayer(int fd)
 {
     players[fd] = std::make_shared<Player>(fd);
+    players[fd]->refreshLastActivity();
     Logger::debug("Lobby: Player added on FD " + std::to_string(fd));
     server.sendMessage(fd, "REQ_NICK", " ");
 }
@@ -20,15 +21,19 @@ void Lobby::removePlayer(int fd)
         if (it->second->getState() == PlayerState::IN_GAMEROOM)
         {
             auto roomIt = rooms.find(it->second->getRoomId());
-            if (roomIt != rooms.end())
+            if (roomIt != rooms.end() && roomIt->second.getState() != GameState::PLAYING)
             {
                 roomIt->second.removePlayer(it->second);
                 roomIt->second.broadcastMessage("ROMSTAUP", roomIt->second.getRoomState());
             }
         }
-        players.erase(it);
+        if (!it->second->getNickname().empty())
+        {
+            disconnectedPlayers[it->second->getNickname()] = it->second;
+        }
+        players.erase(fd);
         dirtyPlayerState();
-        Logger::debug("Lobby: Player removed on FD " + std::to_string(fd));
+        Logger::debug("Lobby: Player flagged as disconnected on FD " + std::to_string(fd));
     }
 }
 
@@ -104,6 +109,7 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
     if (player->getNickname().empty() && msg.command != "LOGIN___")
     {
         Logger::error("Lobby: Player FD " + std::to_string(player->getFd()) + " attempted command without login");
+        handleInvalidMessage(player);
         server.sendMessage(player->getFd(), "REQ_NICK", "");
         return;
     }
@@ -122,7 +128,7 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
                 dirtyPlayerState();
                 return;
             }
-            if (it->second.getState() == GameState::WAITING_FOR_PLAYERS) // Only broadcast if in waiting state - avoid mid-game updates/confusion might delete later for reconnects
+            if (it->second.getState() == GameState::WAITING_FOR_PLAYERS) // Only broadcast if in waiting state - avoid mid-game updates
             {
                 it->second.broadcastMessage("ROMSTAUP", it->second.getRoomState());
             }
@@ -130,8 +136,10 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
         }
         else
         {
+            // should never happen, i dont like unhandled cases
             Logger::error("Lobby: Player FD " + std::to_string(player->getFd()) + " is in unknown room " + std::to_string(player->getRoomId()));
-            server.sendMessage(player->getFd(), "LEAVENCK", "Not in a valid room");
+            server.sendMessage(player->getFd(), "NACKLVRO", "Not in a valid room");
+            handleInvalidMessage(player);
         }
     }
     else if (player->getState() == PlayerState::IN_GAMEROOM)
@@ -155,6 +163,7 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
         {
             Logger::error("Lobby: LOGIN___ command missing arguments");
             server.sendMessage(player->getFd(), "NACK_NIC", "Nickname required");
+            handleInvalidMessage(player);
             return;
         }
         // Check if nickname is already taken
@@ -164,6 +173,22 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
             server.sendMessage(player->getFd(), "NACK_NIC", "Nickname already taken");
             return;
         }
+        // reconnecting disconnected player
+        if (disconnectedPlayers.count(msg.args[0]) > 0)
+        {
+            auto oldPlayer = disconnectedPlayers[msg.args[0]];
+
+            int newFd = player->getFd();
+            oldPlayer->setFd(newFd);
+            players[newFd] = oldPlayer;
+            disconnectedPlayers.erase(msg.args[0]);
+            oldPlayer->refreshLastActivity();
+            server.sendMessage(newFd, "ACK__REC", msg.args[0] + ";" + std::to_string(oldPlayer->getCredits()) + ";" + std::to_string(oldPlayer->getRoomId()));
+            Logger::info("Lobby: Player FD " + std::to_string(newFd) + " reconnected with nickname " + oldPlayer->getNickname());
+            playerStateChanged = true;
+            return;
+        }
+
         // check if nickname is valid
         if (Utils::validateNickname(msg.args[0]))
         {
@@ -175,7 +200,7 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
         else
         {
             server.sendMessage(player->getFd(), "NACK_NIC", "Invalid nickname");
-            Logger::error("Lobby: LOGIN___ command missing arguments or invalid nickname" + (msg.args[0].empty() ? "" : " (" + msg.args[0] + ")"));
+            Logger::error("Lobby: LOGIN___ invalid nickname" + (msg.args[0].empty() ? "" : " (" + msg.args[0] + ")"));
         }
     }
     else if (msg.command == "JOIN____")
@@ -198,23 +223,53 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
         else
         {
             Logger::error("Lobby: JOIN____ command missing arguments");
+            handleInvalidMessage(player);
             server.sendMessage(player->getFd(), "NACK_JON", "Missing room ID");
         }
     }
-    else if (msg.command == "PING____")
-    {
-        server.sendMessage(player->getFd(), "ACK_PING", " ");
-    }
     else
     {
-        Logger::error("Lobby: Unknown message command");
+        handleInvalidMessage(player);
+        Logger::error("Lobby: Player FD " + std::to_string(player->getFd()) + " sent invalid command " + msg.command);
+    }
+}
+
+void Lobby::handleInvalidMessage(std::shared_ptr<Player> player)
+{
+    player->incrementInvalidMsg();
+    Logger::error("Lobby: Player FD " + std::to_string(player->getFd()) + " sent invalid message");
+    if (player->getInvalidMsgCount() > 5)
+    {
+        Logger::error("Lobby: Player FD " + std::to_string(player->getFd()) + " exceeded invalid message limit");
+        server.sendMessage(player->getFd(), "DISCONNECT", "Too many invalid messages");
+        destroyPlayer(player->getFd());
+    }
+}
+
+void Lobby::destroyPlayer(int fd)
+{
+    auto it = players.find(fd);
+    if (it != players.end())
+    {
+        if (it->second->getState() == PlayerState::IN_GAMEROOM)
+        {
+            auto roomIt = rooms.find(it->second->getRoomId());
+            if (roomIt != rooms.end())
+            {
+                roomIt->second.removePlayer(it->second);
+                roomIt->second.broadcastMessage("ROMSTAUP", roomIt->second.getRoomState());
+            }
+        }
+        players.erase(fd);
+        dirtyPlayerState();
+        Logger::debug("Lobby: Player destroyed on FD " + std::to_string(fd));
     }
 }
 
 bool Lobby::assignPlayerToRoom(std::shared_ptr<Player> player, int roomId)
 {
     auto it = rooms.find(roomId);
-    if (it != rooms.end() && it->second.getPlayerCount() < MAX_PLAYERS && it->second.getState() == GameState::WAITING_FOR_PLAYERS)
+    if (it != rooms.end() && it->second.getPlayerCount() < MAX_PLAYERS && it->second.getState() == GameState::WAITING_FOR_PLAYERS && player->getCredits() > 0)
     {
         it->second.addPlayer(player);
         player->setRoomId(roomId);

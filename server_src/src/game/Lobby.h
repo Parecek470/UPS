@@ -19,6 +19,12 @@ public:
 
     // Removes a player (disconnect)
     void removePlayer(int fd);
+    // Destroys a player completely
+    void destroyPlayer(int fd);
+    void handleInvalidMessage(std::shared_ptr<Player> player);
+
+    // Retrieves all players
+    std::map<int, std::shared_ptr<Player>> &getAllPlayers() { return players; }
 
     // checks if a nickname is already taken
     bool nicknameExists(const std::string nickname);
@@ -44,6 +50,7 @@ public:
 
 private:
     std::map<int, std::shared_ptr<Player>> players;
+    std::map<std::string, std::shared_ptr<Player>> disconnectedPlayers;
     std::map<int, GameRoom> rooms;
     TcpServer &server;
     bool playerStateChanged = false;

@@ -14,15 +14,15 @@ int main(int argc, char *argv[])
 {
     Config config;
 
-    // Basic argument parsing: ./server <port>
+    // Basic argument parsing: ./server <ip> <port> <rooms> <maxPlayers>
     if (argc > 1)
-    {
-        config.port = std::stoi(argv[1]);
-    }
+        config.ipAddress = argv[1];
     if (argc > 2)
-    {
-        config.rooms = std::stoi(argv[2]);
-    }
+        config.port = std::stoi(argv[2]);
+    if (argc > 3)
+        config.rooms = std::stoi(argv[3]);
+    if (argc > 4)
+        config.maxPlayers = std::stoi(argv[4]);
 
     // 1. Handle SIGINT (Ctrl+C) for graceful exit
     signal(SIGINT, signalHandler);

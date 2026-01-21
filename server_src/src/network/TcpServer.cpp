@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
 #include <cstring>
 #include <vector>
 #include <chrono>
@@ -46,7 +47,13 @@ void TcpServer::initSocket()
     sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
+    if (config.ipAddress == "0.0.0.0")
+        addr.sin_addr.s_addr = INADDR_ANY;
+    else if (inet_pton(AF_INET, config.ipAddress.c_str(), &addr.sin_addr) <= 0)
+    {
+        Logger::error("Invalid IP address: " + config.ipAddress);
+        exit(EXIT_FAILURE);
+    }
     addr.sin_port = htons(config.port);
 
     if (bind(serverSocket, (struct sockaddr *)&addr, sizeof(addr)) < 0)
@@ -124,20 +131,32 @@ void TcpServer::run()
         // -------------------------------------------------------------
         // PERIODIC TASK: Run every 3 Seconds
         // -------------------------------------------------------------
-        /*
+
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastTask).count();
 
         if (elapsed >= 3)
         {
-            // Update logic goes here (e.g., lobby game loop)
-            // Logger::debug("Running 3-second periodic task...");
-            lobby.update();
+            auto allPlayers = lobby.getAllPlayers();
+            for (auto &pair : allPlayers)
+            {
+                int fd = pair.first;
+                auto player = pair.second;
 
-            // Reset the timer
-            lastTask = now;
+                long inactiveSeconds = player->getSecondsSinceLastActivity();
+                if (inactiveSeconds >= 10)
+                {
+                    Logger::info("Client timed out (No heartbeat): " + std::to_string(fd));
+                    disconnectClient(fd);
+                }
+                else if (inactiveSeconds >= 3)
+                {
+                    // Send PING to check if client is alive
+                    sendMessage(fd, "PING____", "");
+                }
+            }
         }
-        */
+
         // -------------------------------------------------------------
     }
 }
@@ -155,6 +174,13 @@ void TcpServer::handleNewConnection()
         return;
     }
 
+    if (lobby.getAllPlayers().size() >= static_cast<size_t>(config.maxPlayers))
+    {
+        Logger::info("Rejected connection: Max players reached");
+        sendMessage(newFd, "CON_FAIL", "Max players reached");
+        close(newFd);
+        return;
+    }
     // Set non-blocking
     int flags = fcntl(newFd, F_GETFL, 0);
     fcntl(newFd, F_SETFL, flags | O_NONBLOCK);
@@ -221,13 +247,18 @@ void TcpServer::handleClientData(int fd)
     }
     else
     {
-        auto conn = connections[fd];
+        // keep player activity updated trough slow trafic
+        auto player = lobby.getPlayer(fd);
+        if (player)
+        {
+            player->refreshLastActivity();
+        }
         // Append data to buffer
+        auto conn = connections[fd];
         if (conn->appendBuffer(buf, bytesRead))
         {
             // If we have complete lines, process them
             auto msgs = conn->getMessages();
-            auto player = lobby.getPlayer(fd);
 
             for (const auto &rawMsg : msgs)
             {
@@ -251,10 +282,23 @@ void TcpServer::handleClientData(int fd)
                 else
                 {
                     Logger::debug("Recv FD " + std::to_string(fd) + ": " + msg.command);
-                    // HERE: Route valid messages (e.g., to Lobby or GameRoom)
+                    // Route valid messages (e.g., to Lobby or GameRoom) and update last activity for timeout tracking
                     if (player)
                     {
-                        lobby.handle(player, msg);
+                        if (msg.command == "PING____")
+                        {
+                            // Handle PING command (keep-alive)
+                            sendMessage(fd, "PONG____", "");
+                            Logger::debug("Responded to PING from FD " + std::to_string(fd));
+                        }
+                        else if (msg.command == "PONG____")
+                        {
+                            player->refreshLastActivity();
+                        }
+                        else
+                        {
+                            lobby.handle(player, msg);
+                        }
                     }
                 }
             }

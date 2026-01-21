@@ -9,8 +9,10 @@
             "program": "${workspaceFolder}/blackjack_server",
             // No command line arguments for the program
             "args": [
+                "0.0.0.0",
                 "10000",
-                "6"
+                "6",
+                "4"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

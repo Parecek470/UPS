@@ -54,6 +54,28 @@ class NetworkClient:
             message += '\n'
         self._send_queue.put(message.encode('utf-8'))
 
+    def reconnect(self):
+        """Cleanly closes current connection and reconnects."""
+        # Stop current connection
+        self._running = False
+        try:
+            if self._socket:
+                self._selector.unregister(self._socket)
+                self._socket.close()
+        except:
+            pass
+        
+        # Wait for thread to finish
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=1.0)
+        
+        # Reset state
+        self._socket = None
+        self._recv_buffer = b""
+        
+        # Start fresh connection
+        return self.start()
+
     def _run_event_loop(self):
         """
         The main blocking loop (single-threaded concurrency).
@@ -77,7 +99,7 @@ class NetworkClient:
     def _handle_read(self):
         """Reads raw bytes, handles reassembly, emits complete lines."""
         try:
-            data = self._socket.recv(4096)
+            data = self._socket.recv(512)
             if data:
                 self._recv_buffer += data
                 # Message Reassembly Logic:

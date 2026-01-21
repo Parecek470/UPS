@@ -20,6 +20,10 @@ class ProtocolController:
         self.TIMEOUT_SEC = 5.0
         self.MAX_RETRIES = 3
 
+        # connection to server variables
+        self.last_message_time = 0.0
+        self.invalid_msg_count = 0
+
     def set_network(self, network_layer):
         self.network = network_layer
 
@@ -68,6 +72,11 @@ class ProtocolController:
         payload = f"BJ:BT______:{amount}"
         self._send_with_ack_logic(payload)
         print(f"Sending: {payload}")
+    
+    def send_gamestate_request(self):
+        payload = "BJ:REC__GAM"
+        self._send_with_ack_logic(payload)
+        print(f"Sending: {payload}")
 
     def send_fire_and_forget(self, payload): 
         if self.network:
@@ -85,10 +94,13 @@ class ProtocolController:
     def on_network_message(self, raw_msg):
         # 1. Validate Protocol
         if not raw_msg.startswith("BJ:"):
+            self.invalid_msg_count += 1
             print(f"DEBUG: Discarding invalid protocol message: {raw_msg}")
             return
 
-        # 2. Process Valid Message
+        self.last_message_time = time.time()
+
+        #  Process Valid Message
         content = raw_msg[3:].strip() # Remove "BJ:"
 
         cmd, args = (content.split(":", 1) + [None])[:2]
@@ -101,10 +113,23 @@ class ProtocolController:
             self.waiting_for_ack = False
             self.pending_msg = None
             self._notify_gui(cmd, args)
+        elif cmd == "PING____":
+            pong_msg = "BJ:PONG____"
+            if self.network:
+                self.network.send_message(pong_msg)
         else:
             self._notify_gui(cmd , args)
 
     def on_tick(self):
+        if self.last_message_time > 0 and (time.time() - self.last_message_time) > 10:
+            print("DEBUG: Connection timeout detected, marking for reconnection...")
+            self._notify_gui("mark_offline", None)
+            # Don't reconnect directly from the network thread - signal it to stop instead
+            self.network._running = False
+            self.last_message_time = time.time() 
+            return
+            
+
         """Called periodically by the Network Loop to handle timeouts."""
         if self.waiting_for_ack and self.pending_msg:
             now = time.time()
