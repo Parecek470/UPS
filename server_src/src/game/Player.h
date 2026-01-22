@@ -84,7 +84,7 @@ public:
         return std::chrono::duration_cast<std::chrono::seconds>(now - lastActivity).count();
     }
 
-    bool isOffline() const { return getSecondsSinceLastActivity() > 10; }
+    bool isOffline() const { return getSecondsSinceLastActivity() > 9; }
 
 private:
     int fd;

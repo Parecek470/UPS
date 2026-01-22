@@ -90,6 +90,7 @@ class ChatGUI:
 
         if self.player_info.raw_nick != "":
             self.protocol.send_nickname_request(self.player_info.raw_nick)
+            return
 
         self.login_modal = tk.Toplevel(self.root)
         self.login_modal.title("Login")
@@ -227,7 +228,7 @@ class ChatGUI:
                 self.login_modal.destroy()
                 self.login_modal = None
             self.show_frame("Lobby")
-            self.player_info.update_data(nickname=args.split(";",1)[0], credits=args.split(";",1)[1], status="Online")
+            self.player_info.update_data(nickname=args.split(";")[0], credits=args.split(";")[1], status="Online")
             self.frames["Lobby"].show_loading()
         elif cmd == "ACK__REC":
             if args.split(";")[-1] == "-1":
@@ -235,10 +236,10 @@ class ChatGUI:
                     self.login_modal.destroy()
                     self.login_modal = None
                 self.show_frame("Lobby")
-                self.player_info.update_data(nickname=args.split(";",1)[0], credits=args.split(";",1)[1], status="Online")
+                self.player_info.update_data(nickname=args.split(";")[0], credits=args.split(";")[1], status="Online")
                 self.frames["Lobby"].show_loading()
             else:
-                self.player_info.update_data(nickname=args.split(";",1)[0], credits=args.split(";",1)[1], status="Online")
+                self.player_info.update_data(nickname=args.split(";")[0], credits=args.split(";")[1], status="Online")
                 self.show_frame("GameRoom")
                 self.protocol.send_gamestate_request()
         elif cmd == "NACK_NIC":
@@ -292,6 +293,7 @@ class ChatGUI:
             messagebox.showwarning("Play Again Failed", f"Failed to play again: {args}")
         elif cmd == "mark_offline":
             self.player_info.update_data(status="Offline")
+            self.frames["GameRoom"].player_cards[self.player_info.raw_nick].update_data(status="Disconnected")
             
             
             
@@ -400,16 +402,16 @@ class Lobby(tk.Frame):
 
         card.create_rectangle(2, 2, 198, 148, outline="#ccc", width=1)
 
-        card.text_id = card.create_text(100, 50, text=f"Room {room_id+1}", font=("Arial", 16, "bold"))
+        card.text_id = card.create_text(100, 25, text=f"Room {room_id+1}", font=("Arial", 16, "bold"))
 
         players, state = room_data.split(";")
 
-        card.players_id = card.create_text(100, 80, text=f"Players: {players}", font=("Arial", 12))
-        card.state_id = card.create_text(100, 110, text=f"State: {GameState(int(state)).name}", font=("Arial", 12))
+        card.players_id = card.create_text(100, 55, text=f"Players: {players}", font=("Arial", 12))
+        card.state_id = card.create_text(100, 80, text=f"State: {GameState(int(state)).name}", font=("Arial", 12))
 
         join_btn = tk.Button(card, text="JOIN", bg="#4CAF50", fg="white", font=("Arial", 10, "bold"),
                              command=lambda: self.join_room_request(room_id))
-        card.create_window(100, 130, window=join_btn)
+        card.create_window(100, 120, window=join_btn)
 
         return card
 
@@ -653,16 +655,25 @@ class GameRoom(tk.Frame):
                     state = parts[2]
                     cards = parts[3:] # List of cards
                     
+                    match state:
+                        case '0':
+                            tmp = "Standing"
+                        case '1':
+                            tmp = "Playing"
+                        case '2':
+                            tmp = "Disconnected"
+
+
                     if nick in self.player_cards:
-                        self.player_cards[nick].update_data(cards=cards, status="Playing" if state == '1' else "Standing")
+                        self.player_cards[nick].update_data(cards=cards, status=tmp)
                     else:
                         # Should not happen usually, but create if missing
                         pc = PlayerCard(self)
                         self.player_cards[nick] = pc
-                        pc.update_data(nickname=nick, cards=cards, status="Playing" if state == '1' else "Standing")
+                        pc.update_data(nickname=nick, cards=cards, status=tmp)
                         self._reposition_player_cards()
                     if nick == self.controller.player_info.raw_nick:
-                        self.player_cards[nick].update_data(cards=cards, status="Playing" if state == '1' else "Standing")
+                        self.player_cards[nick].update_data(cards=cards, status=(tmp if self.controller.player_info.raw_status != "Offline" else "Disconnected"))
                         if state == '1':
                             self.hit_btn.config(state=tk.NORMAL, bg="#4CAF50", cursor="hand2")
                             self.stand_btn.config(state=tk.NORMAL, bg="#f49b36", cursor="hand2")

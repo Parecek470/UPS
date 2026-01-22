@@ -26,6 +26,10 @@ void Lobby::removePlayer(int fd)
                 roomIt->second.removePlayer(it->second);
                 roomIt->second.broadcastMessage("ROMSTAUP", roomIt->second.getRoomState());
             }
+            else
+            {
+                roomIt->second.broadcastMessage("GAMESTAT", roomIt->second.getGameState());
+            }
         }
         if (!it->second->getNickname().empty())
         {
@@ -136,7 +140,7 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
         }
         else
         {
-            // should never happen, i dont like unhandled cases
+            // invalid room
             Logger::error("Lobby: Player FD " + std::to_string(player->getFd()) + " is in unknown room " + std::to_string(player->getRoomId()));
             server.sendMessage(player->getFd(), "NACKLVRO", "Not in a valid room");
             handleInvalidMessage(player);

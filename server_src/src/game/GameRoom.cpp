@@ -539,16 +539,15 @@ void GameRoom::handle(std::shared_ptr<Player> player, const Message &msg)
     // reconnection of offline player
     if (msg.command == "REC__GAM")
     {
-        server->sendMessage(player->getFd(), "ACK__REC", "");
         if (gameState == GameState::PLAYING)
         {
             Logger::info("GameRoom: Player " + player->getNickname() + " reconnected during PLAYING state in room " + std::to_string(roomId));
-            server->sendMessage(player->getFd(), "GAMESTAT", getGameState());
+            broadcastMessage("GAMESTAT", getGameState());
         }
         else
         {
             Logger::info("GameRoom: Player " + player->getNickname() + " reconnected during BETTING state in room " + std::to_string(roomId));
-            server->sendMessage(player->getFd(), "ROMSTAUP", getRoomState());
+            broadcastMessage("ROMSTAUP", getRoomState());
         }
         return;
     }

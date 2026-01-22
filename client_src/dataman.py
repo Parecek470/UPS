@@ -45,7 +45,7 @@ class ProtocolController:
 
     def send_play_again_signal(self):
         payload = "BJ:PAG_____"
-        self._send_with_ack_logic(payload)
+        self.send_fire_and_forget(payload)
         print(f"Sending: {payload}")
 
     def send_hit_signal(self):
@@ -96,6 +96,11 @@ class ProtocolController:
         if not raw_msg.startswith("BJ:"):
             self.invalid_msg_count += 1
             print(f"DEBUG: Discarding invalid protocol message: {raw_msg}")
+            if self.invalid_msg_count > 3:
+                print("DEBUG: Too many invalid messages, disconnecting...")
+                self._notify_gui("mark_offline", None)
+                if self.network:
+                    self.network._running = False
             return
 
         self.last_message_time = time.time()
@@ -117,6 +122,8 @@ class ProtocolController:
             pong_msg = "BJ:PONG____"
             if self.network:
                 self.network.send_message(pong_msg)
+        elif cmd == "mark_offline":
+            self.invalid_msg_count += 1
         else:
             self._notify_gui(cmd , args)
 
