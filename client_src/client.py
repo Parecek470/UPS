@@ -83,6 +83,25 @@ class ChatGUI:
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close_app)
 
+    def show_warning(self, title, message, parent=None):
+        """Show a warning messagebox that appears in front."""
+        target = parent or self.root
+        target.attributes('-topmost', True)
+        target.focus_force()
+        target.update()
+        messagebox.showwarning(title, message, parent=target)
+        target.attributes('-topmost', False)
+
+    def show_askokcancel(self, title, message, parent=None):
+        """Show an askokcancel dialog that appears in front."""
+        target = parent or self.root
+        target.attributes('-topmost', True)
+        target.focus_force()
+        target.update()
+        result = messagebox.askokcancel(title, message, parent=target)
+        target.attributes('-topmost', False)
+        return result
+
     def open_login_modal(self):
         #create a modal dialog for nickname input, blocking user interaction with main window
         if self.login_modal:
@@ -126,17 +145,17 @@ class ChatGUI:
     def _on_login_click(self):
         nick = self.ent_nick.get().strip()
         if not nick or len(nick) < 3 or len(nick) > 10:
-            messagebox.showwarning("Input", "Nickname must be between 3 and 10 characters.")
+            self.show_warning("Input", "Nickname must be between 3 and 10 characters.", self.login_modal)
             return
         elif ";" in nick or ":" in nick:
-            messagebox.showwarning("Input", "Nickname cannot contain ';' or ':'.")
+            self.show_warning("Input", "Nickname cannot contain ';' or ':'.", self.login_modal)
             return
 
         self.protocol.send_nickname_request(nick)
 
     def _on_close_app(self):
         """Clean shutdown: destroys modal, root, and exits."""
-        if messagebox.askokcancel("Quit", "Do you want to quit?"):
+        if self.show_askokcancel("Quit", "Do you want to quit?"):
             # 1. Close connection if it exists
             if hasattr(self, 'network'):
                 self.network._close_connection("user exit") 
@@ -243,12 +262,12 @@ class ChatGUI:
                 self.show_frame("GameRoom")
                 self.protocol.send_gamestate_request()
         elif cmd == "NACK_NIC":
-            messagebox.showwarning("Login Failed", f"Nickname rejected: {args}")
+            self.show_warning("Login Failed", f"Nickname rejected: {args}")
             self.frames["Lobby"].login_modal.errwarning_label.config(text=f"Nickname already in use: {args}")
         elif cmd == "ACK__JON":
             self.handle_join_room(args)
         elif cmd == "NACK_JON":
-            messagebox.showwarning("Join Room Failed", f"Failed to join room: {'Not enough credits' if self.player_info.raw_credits == 0 else args}")
+            self.show_warning("Join Room Failed", f"Failed to join room: {'Not enough credits' if self.player_info.raw_credits == 0 else args}")
         elif cmd == "LBBYINFO":
             # update players online 
             online_count, room_count, room_data = args.split(":", 2)
@@ -264,7 +283,7 @@ class ChatGUI:
             self.player_info.update_data(credits=self.player_info.raw_credits - int(args))
             self.frames["GameRoom"].show_waiting()
         elif cmd == "NACK__BT":
-            messagebox.showwarning("Bet Failed", f"Failed to place bet: {args}")
+            self.show_warning("Bet Failed", f"Failed to place bet: {args}")
         elif cmd == "GAMESTAT":
             self.frames["GameRoom"].hide_waiting()
             self.frames["GameRoom"].update_game_state(args)
@@ -290,7 +309,7 @@ class ChatGUI:
         elif cmd == "NACK_PAG":
             self.handle_leave_room()
             self.show_frame("Lobby")
-            messagebox.showwarning("Play Again Failed", f"Failed to play again: {args}")
+            self.show_warning("Play Again Failed", f"Failed to play again: {args}")
         elif cmd == "mark_offline":
             self.player_info.update_data(status="Offline")
             self.frames["GameRoom"].player_cards[self.player_info.raw_nick].update_data(status="Disconnected")
@@ -748,6 +767,10 @@ class GameRoom(tk.Frame):
         # Entry for bet amount
         self.bet_amount_entry = tk.Entry(self.bet_modal, font=("Arial", 12))
         self.bet_amount_entry.pack(pady=5)
+        self.bet_amount_entry.focus_set() # Focus the cursor here
+
+        # Bind Enter key to submit
+        self.bet_amount_entry.bind("<Return>", lambda e: self._on_place_bet())
 
         tk.Button(self.bet_modal, text="PLACE BET", bg="#4CAF50", fg="white",
                   command=self._on_place_bet).pack(pady=10)
@@ -808,7 +831,7 @@ class GameRoom(tk.Frame):
         if bet_amount.isdigit():
             self.controller.protocol.send_bet_amount(int(bet_amount))
         else:
-            messagebox.showwarning("Invalid Bet", "Please enter a valid bet amount.")
+            self.controller.show_warning("Invalid Bet", "Please enter a valid bet amount.")
 
     def _on_ready_click(self,isready):
         #send ready message to server

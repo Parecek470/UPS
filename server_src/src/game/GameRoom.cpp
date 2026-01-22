@@ -398,6 +398,7 @@ void GameRoom::handleStateWaitingForPlayers(std::shared_ptr<Player> player, cons
         if (player->getCredits() <= 0)
         {
             server->sendMessage(player->getFd(), "NACK_PAG", "Insufficient credits to continue");
+            removePlayer(player);
             Logger::info("GameRoom: Player " + player->getNickname() + " cannot prepare for next game due to insufficient credits in room " + std::to_string(roomId));
             return;
         }
@@ -503,6 +504,7 @@ void GameRoom::handleStateRoundEnd(std::shared_ptr<Player> player, const Message
         if (player->getCredits() <= 0)
         {
             server->sendMessage(player->getFd(), "NACK_PAG", "Insufficient credits to continue");
+            removePlayer(player);
             Logger::info("GameRoom: Player " + player->getNickname() + " cannot prepare for next game due to insufficient credits in room " + std::to_string(roomId));
             return;
         }
