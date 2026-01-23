@@ -10,8 +10,8 @@ struct Config
     int rooms;
     int maxPlayers;
 
-    // Defaults: Port 10000, 6 rooms max, 4 players max connected
-    Config() : ipAddress("0.0.0.0"), port(10000), rooms(6), maxPlayers(4) {}
+    // Defaults: Port 10000, 6 rooms max, 20 players max connected
+    Config() : ipAddress("0.0.0.0"), port(10000), rooms(6), maxPlayers(20) {}
 };
 
 #endif

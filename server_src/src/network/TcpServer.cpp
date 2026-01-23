@@ -47,7 +47,7 @@ void TcpServer::initSocket()
     sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    if (config.ipAddress == "0.0.0.0")
+    if (config.ipAddress == "0.0.0.0" || config.ipAddress == "localhost")
         addr.sin_addr.s_addr = INADDR_ANY;
     else if (inet_pton(AF_INET, config.ipAddress.c_str(), &addr.sin_addr) <= 0)
     {
@@ -231,7 +231,7 @@ void TcpServer::sendMessage(int fd, std::string command, std::string args)
     {
         // 4. Log the actual message sent (trimming the newline for cleaner logs is optional but nice)
         // We use finalMessage here to see exactly what went over the wire.
-        if(command != "PING____")
+        if (command != "PING____")
             Logger::debug("Sent to FD " + std::to_string(fd) + ": " + finalMessage);
     }
 }
