@@ -10,6 +10,17 @@ void signalHandler(int signum)
     exit(signum);
 }
 
+void print_help()
+{
+    std::cout << "Usage: ./blackjack_server [options]\n";
+    std::cout << "Options:\n";
+    std::cout << "  -i <ip>       IP address to bind to (default: 0.0.0.0)\n";
+    std::cout << "  -p <port>     Port number (default: 10000)\n";
+    std::cout << "  -r <rooms>    Number of rooms (1-20, default: 6)\n";
+    std::cout << "  -m <players>  Max players (1-300, default: 20)\n";
+    std::cout << "  -h, --help    Show this help message\n";
+}
+
 int parse_arguments(int argc, char *argv[], Config &config)
 {
     // Basic argument parsing: ./server -i <ip> -p <port> -r <rooms> -m <maxPlayers>
@@ -83,17 +94,6 @@ int parse_arguments(int argc, char *argv[], Config &config)
     }
 
     return 0;
-}
-
-void print_help()
-{
-    std::cout << "Usage: ./blackjack_server [options]\n";
-    std::cout << "Options:\n";
-    std::cout << "  -i <ip>       IP address to bind to (default: 0.0.0.0)\n";
-    std::cout << "  -p <port>     Port number (default: 10000)\n";
-    std::cout << "  -r <rooms>    Number of rooms (1-20, default: 6)\n";
-    std::cout << "  -m <players>  Max players (1-300, default: 20)\n";
-    std::cout << "  -h, --help    Show this help message\n";
 }
 
 int main(int argc, char *argv[])
