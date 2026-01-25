@@ -74,7 +74,7 @@ void Lobby::update()
 
     for (auto &room : rooms)
     {
-        if (room.second.getState() != GameState::ROUND_END || (room.second.getPlayerCount() == 0 && room.second.getState() == GameState::ROUND_END))
+        if (room.second.getState() != GameState::ROUND_END || (room.second.areAllPlayersOffline() && room.second.getState() == GameState::ROUND_END))
             room.second.update();
     }
 }

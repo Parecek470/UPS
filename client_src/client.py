@@ -66,7 +66,7 @@ class BlackJackGui:
 
         #_______________Player Info_________________
         self.player_info = PlayerInfo(self.root)
-        self.player_info.place(x=700, y=5) # Top-right corner
+        self.player_info.place(x=600, y=5) # Top-right corner
 
         # Disconnection modal reference
         self.disconnection_modal = None
@@ -169,9 +169,9 @@ class BlackJackGui:
 
         self.protocol.send_nickname_request(nick)
 
-    def _on_close_app(self):
+    def _on_close_app(self, force=False):
         """Clean shutdown: destroys modal, root, and exits."""
-        if self.show_askokcancel("Quit", "Do you want to quit?"):
+        if force or self.show_askokcancel("Quit", "Do you want to quit?"):
             # 1. Close connection if it exists
             if hasattr(self, 'network'):
                 self.network._close_connection("user exit") 
@@ -414,6 +414,9 @@ class BlackJackGui:
             self.handle_leave_room()
             self.show_frame("Lobby")
             self.show_warning("Play Again Failed", f"Failed to play again: {args}")
+        elif cmd == "CON_FAIL":
+            self.show_warning("Connection Failed", f"Failed to connect to server: {args}")
+            self._on_close_app(force=True)
         elif cmd == "mark_offline":
             self.show_disconnection_modal()  # Show disconnection modal
             self.player_info.update_data(status="Offline")

@@ -31,6 +31,7 @@ void GameRoom::ResetDefaultState()
         {
             Logger::info("GameRoom: Removing offline player " + player->getNickname() + " from room " + std::to_string(roomId));
             server->lobby.removePlayer(player->getFd());
+            removePlayer(player);
         }
     }
 

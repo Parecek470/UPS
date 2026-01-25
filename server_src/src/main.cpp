@@ -32,15 +32,29 @@ int parse_arguments(int argc, char *argv[], Config &config)
         }
         else if (std::string(argv[i]) == "-p" && i + 1 < argc)
         {
+            std::string portStr = argv[++i];
             try
             {
-                config.port = std::stoi(argv[++i]);
+                size_t pos;
+                // std::stoi(str, &pos) sets 'pos' to the index of the first character *after* the number
+                int parsedPort = std::stoi(portStr, &pos);
+
+                // Check 1: Did we consume the entire string?
+                // If pos < portStr.length(), it means there was garbage left over (like ".1.1.1")
+                if (pos < portStr.length())
+                {
+                    throw std::invalid_argument("Port contains non-numeric characters");
+                }
+
+                config.port = parsedPort;
             }
             catch (const std::exception &e)
             {
-                Logger::error("Invalid port number provided. Using default port " + std::to_string(Config().port));
+                Logger::error("Invalid port format provided: '" + portStr + "'. Using default port " + std::to_string(Config().port));
                 config.port = Config().port;
             }
+
+            // Check 2: Is it within valid TCP/UDP range?
             if (config.port < 0 || config.port > 65535)
             {
                 Logger::error("Port number out of valid range (0-65535). Using default port " + std::to_string(Config().port));
