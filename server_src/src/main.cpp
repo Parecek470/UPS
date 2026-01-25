@@ -72,13 +72,7 @@ int parse_arguments(int argc, char *argv[], Config &config)
         }
         else if (std::string(argv[i]) == "-h" || std::string(argv[i]) == "--help")
         {
-            std::cout << "Usage: " << argv[0] << " [options]\n";
-            std::cout << "Options:\n";
-            std::cout << "  -i <ip>       IP address to bind to (default: 0.0.0.0)\n";
-            std::cout << "  -p <port>     Port number (default: 10000)\n";
-            std::cout << "  -r <rooms>    Number of rooms (1-20, default: 6)\n";
-            std::cout << "  -m <players>  Max players (1-300, default: 20)\n";
-            std::cout << "  -h, --help    Show this help message\n";
+            print_help();
             return 2;
         }
         else
@@ -89,6 +83,17 @@ int parse_arguments(int argc, char *argv[], Config &config)
     }
 
     return 0;
+}
+
+void print_help()
+{
+    std::cout << "Usage: ./blackjack_server [options]\n";
+    std::cout << "Options:\n";
+    std::cout << "  -i <ip>       IP address to bind to (default: 0.0.0.0)\n";
+    std::cout << "  -p <port>     Port number (default: 10000)\n";
+    std::cout << "  -r <rooms>    Number of rooms (1-20, default: 6)\n";
+    std::cout << "  -m <players>  Max players (1-300, default: 20)\n";
+    std::cout << "  -h, --help    Show this help message\n";
 }
 
 int main(int argc, char *argv[])
@@ -104,6 +109,7 @@ int main(int argc, char *argv[])
         break;
     case 1:
         Logger::error("Error parsing arguments.");
+        print_help();
         return 1;
     case 2:
         // Help was shown, exit gracefully
