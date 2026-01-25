@@ -27,6 +27,11 @@ void GameRoom::ResetDefaultState()
     for (auto &player : players)
     {
         player->resetGameAttributes();
+        if (player->isOffline())
+        {
+            Logger::info("GameRoom: Removing offline player " + player->getNickname() + " from room " + std::to_string(roomId));
+            server->lobby.removePlayer(player->getFd());
+        }
     }
 
     Logger::info("GameRoom: Room " + std::to_string(roomId) + " reset to default state");
@@ -112,9 +117,12 @@ void GameRoom::update()
             Logger::info("GameRoom: Room " + std::to_string(roomId) + " transitioning to ROUND_END state");
             dealerPlay();
             broadcastMessage("GAMESTAT", getGameState());
+            server->lobby.dirtyPlayerState();
             // Notify players of round end and results
             for (const auto &player : players)
             {
+                if (player->isOffline())
+                    continue;
                 server->sendMessage(player->getFd(), "ROUNDEND", getCredits(player));
             }
         }
@@ -132,7 +140,6 @@ void GameRoom::update()
     case GameState::ROUND_END:
         // Handle end of round logic here
         ResetDefaultState();
-        gameState = GameState::WAITING_FOR_PLAYERS;
         server->lobby.dirtyPlayerState();
         Logger::info("GameRoom: Room " + std::to_string(roomId) + " transitioning to WAITING_FOR_PLAYERS state");
         break;

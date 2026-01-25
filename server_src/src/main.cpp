@@ -29,7 +29,6 @@ int parse_arguments(int argc, char *argv[], Config &config)
             {
                 Logger::error("Invalid port number provided. Using default port " + std::to_string(Config().port));
                 config.port = Config().port;
-                return 0;
             }
             if (config.port < 0 || config.port > 65535)
             {
@@ -46,13 +45,12 @@ int parse_arguments(int argc, char *argv[], Config &config)
             catch (const std::exception &e)
             {
                 Logger::error("Invalid rooms number provided. Using default rooms " + std::to_string(Config().rooms));
-                return 0;
+                config.rooms = Config().rooms;
             }
             if (config.rooms < 1 || config.rooms > 20)
             {
                 Logger::error("Rooms number out of valid range (1-20). Using default rooms " + std::to_string(Config().rooms));
                 config.rooms = Config().rooms;
-                return 1;
             }
         }
         else if (std::string(argv[i]) == "-m" && i + 1 < argc)
@@ -64,13 +62,12 @@ int parse_arguments(int argc, char *argv[], Config &config)
             catch (const std::exception &e)
             {
                 Logger::error("Invalid max players number provided. Using default max players " + std::to_string(Config().maxPlayers));
-                return 1;
+                config.maxPlayers = Config().maxPlayers;
             }
             if (config.maxPlayers < 1 || config.maxPlayers > 300)
             {
                 Logger::error("Max players number out of valid range (1-300). Using default max players " + std::to_string(Config().maxPlayers));
                 config.maxPlayers = Config().maxPlayers;
-                return 1;
             }
         }
         else if (std::string(argv[i]) == "-h" || std::string(argv[i]) == "--help")
@@ -103,7 +100,7 @@ int main(int argc, char *argv[])
     switch (parseResult)
     {
     case 0:
-        Logger::info("Arguments parsed successfully.");
+        Logger::info("Arguments processed successfully.");
         break;
     case 1:
         Logger::error("Error parsing arguments.");

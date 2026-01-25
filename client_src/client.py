@@ -139,7 +139,8 @@ class BlackJackGui:
         self.ent_nick = tk.Entry(self.login_modal, font=("Arial", 12), validate="key", validatecommand=self.validnickname)
         self.ent_nick.pack(pady=5)
         self.ent_nick.focus_set() # Focus the cursor here
-        
+        self.login_modal.attributes('-topmost', True)
+
         # Bind Enter key to submit
         self.ent_nick.bind("<Return>", lambda e: self._on_login_click())
 
@@ -1196,10 +1197,10 @@ if __name__ == "__main__":
 
     # 2. Define arguments
     # nargs='?' means the argument is optional.
-    parser.add_argument("host", nargs="?", default="127.0.0.1", 
+    parser.add_argument("-i", "--ipaddress", default="127.0.0.1", 
                         help="The Server IP address (default: 127.0.0.1)")
     
-    parser.add_argument("port", nargs="?", type=int, default=10000, 
+    parser.add_argument("-p", "--port", type=int, default=10000, 
                         help="The Server Port (default: 10000)")
 
     # 3. Parse arguments
@@ -1212,19 +1213,19 @@ if __name__ == "__main__":
 
     # chacking ip address validity
     try:
-        ipaddress.ip_address(args.host)
+        ipaddress.ip_address(args.ipaddress)
     except ValueError:
-        print(f"Error: Invalid IP address format: {args.host}")
+        print(f"Error: Invalid IP address format: {args.ipaddress}")
         sys.exit(1)
 
-    print(f"Configuration loaded: {args.host}:{args.port}")
+    print(f"Configuration loaded: {args.ipaddress}:{args.port}")
 
     
     root = tk.Tk()
-    
-    # Note: We access the values via args.host and args.port
-    app = BlackJackGui(root, args.host, args.port)
-    
+
+    # Note: We access the values via args.ipaddress and args.port
+    app = BlackJackGui(root, args.ipaddress, args.port)
+
     try:
         root.mainloop()
     except KeyboardInterrupt:
