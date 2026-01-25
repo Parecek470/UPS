@@ -1,7 +1,7 @@
 /**
  * Server for blackjack
  * Author: Marek Manzel
- * 
+ *
  * TcpServer.h - Main TCP server class for the blackjack game
  * Handles incoming client connections, manages socket operations using select(),
  * and coordinates between network layer and game logic through the Lobby system.

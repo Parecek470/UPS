@@ -11,7 +11,7 @@
 #include <chrono>
 
 TcpServer::TcpServer(const Config &cfg)
-    : config(cfg), serverSocket(-1), isRunning(false), maxFd(0), lobby(*this)
+    : lobby(*this), config(cfg), serverSocket(-1), isRunning(false), maxFd(0)
 {
     FD_ZERO(&masterSet);
 }
