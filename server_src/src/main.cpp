@@ -28,7 +28,13 @@ int parse_arguments(int argc, char *argv[], Config &config)
             catch (const std::exception &e)
             {
                 Logger::error("Invalid port number provided. Using default port " + std::to_string(Config().port));
-                return 1;
+                config.port = Config().port;
+                return 0;
+            }
+            if (config.port < 0 || config.port > 65535)
+            {
+                Logger::error("Port number out of valid range (0-65535). Using default port " + std::to_string(Config().port));
+                config.port = Config().port;
             }
         }
         else if (std::string(argv[i]) == "-r" && i + 1 < argc)
@@ -40,7 +46,7 @@ int parse_arguments(int argc, char *argv[], Config &config)
             catch (const std::exception &e)
             {
                 Logger::error("Invalid rooms number provided. Using default rooms " + std::to_string(Config().rooms));
-                return 1;
+                return 0;
             }
             if (config.rooms < 1 || config.rooms > 20)
             {
