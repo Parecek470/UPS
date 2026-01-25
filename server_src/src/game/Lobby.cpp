@@ -71,6 +71,12 @@ void Lobby::update()
             // server.sendMessage(player->getFd(), "REQ_NICK", " ");
         }
     }
+
+    for (auto &room : rooms)
+    {
+        if (room.second.getState() != GameState::ROUND_END || (room.second.getPlayerCount() == 0 && room.second.getState() == GameState::ROUND_END))
+            room.second.update();
+    }
 }
 
 void Lobby::broadcastMessage(const std::string &command, const std::string &args)
@@ -114,7 +120,6 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
     {
         Logger::error("Lobby: Player FD " + std::to_string(player->getFd()) + " attempted command without login");
         handleInvalidMessage(player);
-        server.sendMessage(player->getFd(), "REQ_NICK", "");
         return;
     }
     if (msg.command == "LVRO____")
@@ -171,7 +176,7 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
             return;
         }
         // Check if nickname is already taken
-        if (nicknameExists(msg.args[0]))
+        if (nicknameExists(msg.args[0]) && msg.args[0] != player->getNickname())
         {
             Logger::error("Lobby: Player FD " + std::to_string(player->getFd()) + " failed LOGIN___ command - nickname already taken (" + msg.args[0] + ")");
             server.sendMessage(player->getFd(), "NACK_NIC", "Nickname already taken");
@@ -187,6 +192,7 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
             players[newFd] = oldPlayer;
             disconnectedPlayers.erase(msg.args[0]);
             oldPlayer->refreshLastActivity();
+            oldPlayer->resetInvalidMsgCount();
             server.sendMessage(newFd, "ACK__REC", msg.args[0] + ";" + std::to_string(oldPlayer->getCredits()) + ";" + std::to_string(oldPlayer->getRoomId()));
             Logger::info("Lobby: Player FD " + std::to_string(newFd) + " reconnected with nickname " + oldPlayer->getNickname());
             playerStateChanged = true;

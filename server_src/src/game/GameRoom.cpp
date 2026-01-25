@@ -30,7 +30,6 @@ void GameRoom::ResetDefaultState()
     }
 
     Logger::info("GameRoom: Room " + std::to_string(roomId) + " reset to default state");
-    update();
 }
 
 void GameRoom::broadcastMessage(const std::string &message, const std::string &args)
@@ -81,6 +80,7 @@ void GameRoom::update()
             // Notify players
             broadcastMessage("REQ_BET_");
         }
+
         break;
 
     case GameState::BETTING:
@@ -94,6 +94,13 @@ void GameRoom::update()
             dealCards();
             startTurnTimer();
             broadcastMessage("GAMESTAT", getGameState());
+        }
+        if (areAllPlayersOffline() || players.empty())
+        {
+            Logger::info("GameRoom: All players offline in room " + std::to_string(roomId) + ", resetting to WAITING_FOR_PLAYERS state");
+            ResetDefaultState();
+            gameState = GameState::WAITING_FOR_PLAYERS;
+            server->lobby.dirtyPlayerState();
         }
         break;
 
@@ -111,7 +118,7 @@ void GameRoom::update()
                 server->sendMessage(player->getFd(), "ROUNDEND", getCredits(player));
             }
         }
-        else if (getTurnElapsedSeconds() >= 30)
+        else if (getTurnElapsedSeconds() >= 80)
         {
             // Auto-stand for current player
             auto currentPlayer = turnOrder.front();
@@ -130,6 +137,18 @@ void GameRoom::update()
         Logger::info("GameRoom: Room " + std::to_string(roomId) + " transitioning to WAITING_FOR_PLAYERS state");
         break;
     }
+}
+
+bool GameRoom::areAllPlayersOffline() const
+{
+    for (const auto &player : players)
+    {
+        if (!player->isOffline())
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::string GameRoom::getCredits(std::shared_ptr<Player> player) const
@@ -541,10 +560,17 @@ void GameRoom::handle(std::shared_ptr<Player> player, const Message &msg)
     // reconnection of offline player
     if (msg.command == "REC__GAM")
     {
+
         if (gameState == GameState::PLAYING)
         {
             Logger::info("GameRoom: Player " + player->getNickname() + " reconnected during PLAYING state in room " + std::to_string(roomId));
             broadcastMessage("GAMESTAT", getGameState());
+        }
+        else if (gameState == GameState::ROUND_END)
+        {
+            Logger::info("GameRoom: Player " + player->getNickname() + " reconnected during ROUND_END state in room " + std::to_string(roomId));
+            server->sendMessage(player->getFd(), "ROUNDEND", getCredits(player));
+            broadcastMessage("ROMSTAUP", getRoomState());
         }
         else
         {

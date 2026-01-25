@@ -1,3 +1,12 @@
+/**
+ * Server for blackjack
+ * Author: Marek Manzel
+ * 
+ * Logger.h - Thread-safe logging system for the blackjack server
+ * Provides static methods for logging messages with different severity levels
+ * (INFO, WARNING, ERROR, DEBUG) to the console with timestamps.
+ */
+
 #ifndef LOGGER_H
 #define LOGGER_H
 

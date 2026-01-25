@@ -1,3 +1,12 @@
+/**
+ * Server for blackjack
+ * Author: Marek Manzel
+ * 
+ * ClientConnection.h - Client connection handler for individual socket connections
+ * Manages buffering of incoming data from clients and extracts complete messages
+ * delimited by newlines. Handles partial message reception and reconstruction.
+ */
+
 #ifndef CLIENT_CONNECTION_H
 #define CLIENT_CONNECTION_H
 

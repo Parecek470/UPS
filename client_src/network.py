@@ -1,11 +1,11 @@
+"""BlackJack Client Application - Network Layer"""
+"""author: Marek Manzel"""
+""" responsibilities: Socket management, select/poll loop, byte stream reassembly """
 import socket
 import selectors
 import threading
 import queue
-# ==============================================================================
-# 1) NETWORK LAYER
-# Responsibilities: Socket management, select/poll loop, byte stream reassembly
-# ==============================================================================
+
 class NetworkClient:
     """
     Handles low-level TCP socket operations using a selector-based event loop.
@@ -53,6 +53,11 @@ class NetworkClient:
         if not message.endswith('\n'):
             message += '\n'
         self._send_queue.put(message.encode('utf-8'))
+    
+    def clean_send_queue(self):
+        """Empties the send queue."""
+        with self._send_queue.mutex:
+            self._send_queue.queue.clear()
 
     def reconnect(self):
         """Cleanly closes current connection and reconnects."""
@@ -82,19 +87,22 @@ class NetworkClient:
         Uses select/poll to multiplex I/O and handle logic ticks.
         """
         while self._running:
-            # 1. Logic Tick: Allow Protocol layer to check timeouts
-            if self.tick_callback:
-                self.tick_callback()
+            try:
+                # 1. Logic Tick: Allow Protocol layer to check timeouts
+                if self.tick_callback:
+                    self.tick_callback()
 
-            # 2. Select: Wait for I/O events with a short timeout
-            # Timeout ensures we don't block forever and can process the send_queue/timers
-            events = self._selector.select(timeout=0.1)
+                # 2. Select: Wait for I/O events with a short timeout
+                # Timeout ensures we don't block forever and can process the send_queue/timers
+                events = self._selector.select(timeout=0.1)
 
-            for key, mask in events:
-                if mask & selectors.EVENT_READ:
-                    self._handle_read()
-                if mask & selectors.EVENT_WRITE:
-                    self._handle_write()
+                for key, mask in events:
+                    if mask & selectors.EVENT_READ:
+                        self._handle_read()
+                    if mask & selectors.EVENT_WRITE:
+                        self._handle_write()
+            except Exception as e:
+                self._close_connection(f"Event loop error: {e}")
 
     def _handle_read(self):
         """Reads raw bytes, handles reassembly, emits complete lines."""
@@ -121,6 +129,10 @@ class NetworkClient:
             pass # Socket not ready
         except Exception as e:
             self._close_connection(f"Read error: {e}")
+
+    def is_connected(self):
+        """Checks if the socket is currently connected."""
+        return self._running and self._socket is not None
 
     def _handle_write(self):
         """Checks send queue and writes to socket."""

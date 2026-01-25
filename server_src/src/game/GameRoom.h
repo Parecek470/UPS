@@ -1,3 +1,13 @@
+/**
+ * Server for blackjack
+ * Author: Marek Manzel
+ *
+ * GameRoom.h - Blackjack game room implementation
+ * Manages a single blackjack game instance with up to 7 players.
+ * Handles game states (waiting, betting, playing, round end), card dealing,
+ * betting logic, and game flow coordination.
+ */
+
 #ifndef GAME_ROOM_H
 #define GAME_ROOM_H
 
@@ -47,6 +57,7 @@ public:
     void handleInvalidMessage(std::shared_ptr<Player> player);
 
     bool areAllPlayersReady() const;
+    bool areAllPlayersOffline() const;
     bool placeBet(std::shared_ptr<Player> player, int amount);
     bool allPlayersPlacedBets() const;
     void update();

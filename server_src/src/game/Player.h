@@ -1,3 +1,13 @@
+/**
+ * Server for blackjack
+ * Author: Marek Manzel
+ * 
+ * Player.h - Player data structure and state management
+ * Represents a connected player with their game state, including nickname,
+ * credits, cards, betting information, and connection status.
+ * Tracks player position in lobby or game room.
+ */
+
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -32,6 +42,7 @@ public:
 
     void incrementInvalidMsg() { invalidMsgCount++; }
     int getInvalidMsgCount() const { return invalidMsgCount; }
+    void resetInvalidMsgCount() { invalidMsgCount = 0; }
     int getRoomId() const { return roomId; }
     void setRoomId(int id) { roomId = id; }
 

@@ -1,8 +1,12 @@
+"""BlackJack Client Application - GUI Layer"""
+"""author: Marek Manzel"""
+""" responsibilities: Tkinter GUI, user interaction, display updates """
 import sys
 import os
 import queue
 import tkinter as tk
-import time
+import argparse
+import ipaddress
 from tkinter import messagebox
 from enum import Enum
 from PIL import Image, ImageTk
@@ -20,7 +24,7 @@ class GameState(Enum):
 
 GameState = Enum('GameState', [('Waiting for players', 0), ('Betting phase', 1), ('Playing', 2), ('Evaluating results', 3)])
 
-class ChatGUI:
+class BlackJackGui:
     def __init__(self, root, host, port):
         self.root = root
         self.root.title(f"BlackJack Client - {host}:{port}")
@@ -47,6 +51,7 @@ class ChatGUI:
             tick_callback=self.protocol.on_tick
         )
         self.protocol.set_network(self.network)
+        self.protocol.connected = True
 
         self.root.resizable(False, False)
         
@@ -63,6 +68,8 @@ class ChatGUI:
         self.player_info = PlayerInfo(self.root)
         self.player_info.place(x=700, y=5) # Top-right corner
 
+        # Disconnection modal reference
+        self.disconnection_modal = None
 
         for F in (Lobby, GameRoom):
             page_name = F.__name__
@@ -107,7 +114,7 @@ class ChatGUI:
         if self.login_modal:
             return # Already open
 
-        if self.player_info.raw_nick != "":
+        if self.player_info.raw_nick != "" and self.player_info.raw_nick is not None:
             self.protocol.send_nickname_request(self.player_info.raw_nick)
             return
 
@@ -128,8 +135,8 @@ class ChatGUI:
         # UI Elements
         tk.Label(self.login_modal, text="Enter Nickname:", font=("Arial", 12)).pack(pady=10)
         
-
-        self.ent_nick = tk.Entry(self.login_modal, font=("Arial", 12))
+        self.validnickname = (self.root.register(self._validate_nickname), '%P')
+        self.ent_nick = tk.Entry(self.login_modal, font=("Arial", 12), validate="key", validatecommand=self.validnickname)
         self.ent_nick.pack(pady=5)
         self.ent_nick.focus_set() # Focus the cursor here
         
@@ -141,6 +148,14 @@ class ChatGUI:
         
         # Prevent closing via 'X' button (optional, forces user to login)
         self.login_modal.protocol("WM_DELETE_WINDOW", self._on_close_app)
+
+    def _validate_nickname(self, newValue: str):
+        """Validate nickname: max 10 chars, alphanumeric only. "-" , "_" allowed."""
+        if newValue == "":
+            return True
+        if len(newValue) <= 10 and all(c.isalnum() or c in "-_" for c in newValue):
+            return True
+        return False
 
     def _on_login_click(self):
         nick = self.ent_nick.get().strip()
@@ -218,6 +233,7 @@ class ChatGUI:
             if not self.network._running and self.network._thread:
                 # Only reconnect if thread has actually stopped
                 if not self.network._thread.is_alive():
+                    self.process_gui_message("mark_offline", None)  # Notify GUI of disconnection
                     print("DEBUG: Network thread stopped, attempting reconnection...")
                     
                     # Create new network connection
@@ -232,28 +248,116 @@ class ChatGUI:
                     if success:
                         self.protocol.set_network(new_network)
                         self.network = new_network  # Update our reference
-                        # Update GUI to show we're back online
+                        print("DEBUG: Reconnection attempt...")
                     else:
                         print(f"DEBUG: Reconnection failed: {msg}")
+
+    def show_disconnection_modal(self):
+        """Show disconnection modal with blocking interaction."""
+        if self.disconnection_modal:
+            return  # Already open
+        
+
+        self.disconnection_modal = tk.Toplevel(self.root)
+        self.disconnection_modal.title("Connection Lost")
+        
+        # 1. Start Hidden (Prevents the "Flash")
+        self.disconnection_modal.withdraw()
+
+        # 2. Configure Window
+        window_size = 400
+        self.disconnection_modal.geometry(f"{window_size}x{window_size}")
+        self.disconnection_modal.resizable(False, False)
+        self.disconnection_modal.transient(self.root)
+        self.disconnection_modal.grab_set()
+
+        # Define styles
+        text_bg = "#E1EFFD"
+        text_color = "black"
+
+        # Load and display disconnected image (Background)
+        try:
+            if os.path.exists("disconnected.jpg"):
+                img = Image.open("disconnected.jpg")
+                
+                # 2. Resize to fill the modal completely (400x400)
+                img = img.resize((window_size, window_size), Image.Resampling.LANCZOS)
+                self.disconnection_image = ImageTk.PhotoImage(img)
+                
+                # Use Place to make it a background
+                img_label = tk.Label(self.disconnection_modal, image=self.disconnection_image)
+                img_label.place(x=0, y=0, relwidth=1, relheight=1)
+            else:
+                # Fallback background if image missing
+                self.disconnection_modal.configure(bg=text_bg)
+                tk.Label(self.disconnection_modal, text="Connection Lost", 
+                         font=("Arial", 16, "bold"), fg="red", bg=text_bg).pack(pady=20)
+        except Exception as e:
+            print(f"Error loading disconnected.jpg: {e}")
+            self.disconnection_modal.configure(bg=text_bg)
+
+        # 3. Text and Buttons (Placed on top of image)
+        # Note: Using .place() instead of .pack() to layer over the image
+        
+        # Status message
+        tk.Label(self.disconnection_modal, text="It appears you have no connection.", 
+                 font=("Arial", 14, "bold"), fg=text_color, bg=text_bg).place(relx=0.5, rely=0.9, anchor="center")
+        
+        tk.Label(self.disconnection_modal, text="Attempting to reconnect...", 
+                 font=("Arial", 10), fg=text_color, bg=text_bg).place(relx=0.5, rely=0.95, anchor="center")
+        
+
+        self.root.update_idletasks()
+        self.disconnection_modal.update_idletasks()
+
+        # 4. Calculate Center Relative to Main Window
+        # Get Main Window dimensions and position
+        root_w = self.root.winfo_width()
+        root_h = self.root.winfo_height()
+        root_x = self.root.winfo_rootx()
+        root_y = self.root.winfo_rooty()
+
+        # Calculate offsets
+        x = root_x + (root_w // 2) - (window_size // 2)
+        y = root_y + (root_h // 2) - (window_size // 2)
+
+        # Apply Geometry
+        self.disconnection_modal.geometry(f"+{x}+{y}")
+        
+        # 5. Reveal
+        self.disconnection_modal.deiconify()
+        self.disconnection_modal.attributes('-topmost', True)
+        self.disconnection_modal.protocol("WM_DELETE_WINDOW", self._on_close_app)
+
+
+    def hide_disconnection_modal(self):
+        """Hide disconnection modal when reconnected."""
+        if self.disconnection_modal:
+            self.disconnection_modal.destroy()
+            self.disconnection_modal = None
 
     def process_gui_message(self, cmd, args):
         """Thread-safe update of text widget."""
         print(f"Command: {cmd}, Args: {args}")
         if cmd == "REQ_NICK":
             self.player_info.update_data(status="Online")
+            self.hide_disconnection_modal()  # Hide disconnection modal when back online
             self.open_login_modal()
         elif cmd == "ACK__NIC":
             if self.login_modal:
                 self.login_modal.destroy()
                 self.login_modal = None
+            self.hide_disconnection_modal()  # Hide disconnection modal when back online
             self.show_frame("Lobby")
             self.player_info.update_data(nickname=args.split(";")[0], credits=args.split(";")[1], status="Online")
             self.frames["Lobby"].show_loading()
         elif cmd == "ACK__REC":
+            if self.login_modal:
+                self.login_modal.destroy()
+                self.login_modal = None
+            self.hide_disconnection_modal()  # Hide disconnection modal when back online
             if args.split(";")[-1] == "-1":
-                if self.login_modal:
-                    self.login_modal.destroy()
-                    self.login_modal = None
+                self.handle_leave_room()
                 self.show_frame("Lobby")
                 self.player_info.update_data(nickname=args.split(";")[0], credits=args.split(";")[1], status="Online")
                 self.frames["Lobby"].show_loading()
@@ -263,7 +367,6 @@ class ChatGUI:
                 self.protocol.send_gamestate_request()
         elif cmd == "NACK_NIC":
             self.show_warning("Login Failed", f"Nickname rejected: {args}")
-            self.frames["Lobby"].login_modal.errwarning_label.config(text=f"Nickname already in use: {args}")
         elif cmd == "ACK__JON":
             self.handle_join_room(args)
         elif cmd == "NACK_JON":
@@ -311,8 +414,10 @@ class ChatGUI:
             self.show_frame("Lobby")
             self.show_warning("Play Again Failed", f"Failed to play again: {args}")
         elif cmd == "mark_offline":
+            self.show_disconnection_modal()  # Show disconnection modal
             self.player_info.update_data(status="Offline")
-            self.frames["GameRoom"].player_cards[self.player_info.raw_nick].update_data(status="Disconnected")
+            if "GameRoom" in self.frames and self.player_info.raw_nick in self.frames["GameRoom"].player_cards:
+                self.frames["GameRoom"].player_cards[self.player_info.raw_nick].update_data(status="Disconnected")
             
             
             
@@ -405,6 +510,8 @@ class Lobby(tk.Frame):
 
         self.loading_label = tk.Label(self, text="Loading Rooms...", bg="#90EE90", fg="#006400",
                                       font=("Arial", 14, "bold"), relief="raised", borderwidth=2)
+        
+        
         
     def show_loading(self):
         self.loading_label.place(relx=0.5, rely=0.5, anchor="center", width=200, height=50)
@@ -734,7 +841,7 @@ class GameRoom(tk.Frame):
         self.readybutton.place(x=370, y=260)
 
         #disable closing the modal to force ready
-        self.ready_modal.protocol("WM_DELETE_WINDOW", lambda: None)
+        self.ready_modal.protocol("WM_DELETE_WINDOW", lambda: self.leave_room())
 
     def leave_room(self):
         self.controller.protocol.send_leave_room_request()
@@ -752,12 +859,24 @@ class GameRoom(tk.Frame):
         # Modal behavior: Keep on top and disable main window
         self.bet_modal.transient(self.controller.root)
         self.bet_modal.grab_set()
-
-
+        
         # Center the modal
-        x = self.controller.root.winfo_x() + (800 // 2) - (300 // 2)
-        y = self.controller.root.winfo_y() + (600 // 2) - (150 // 2)
-        self.bet_modal.geometry(f"+{x}+{y}")
+        x = self.controller.root.winfo_x() + (800 // 2) - (225 // 2)  # 450/2 = 225
+        y = self.controller.root.winfo_y() + (600 // 2) - (100 // 2)  # 200/2 = 100
+        self.bet_modal.geometry(f"450x200+{x}+{y}")
+
+        # Make window visible first
+        self.bet_modal.deiconify()
+        self.bet_modal.update_idletasks()
+        
+        # NOW remove decorations to make it borderless
+        self.bet_modal.overrideredirect(True)
+        
+        # Re-apply positioning after removing decorations
+        self.bet_modal.geometry(f"450x200+{x}+{y}")
+        
+        # Ensure it stays on top
+        self.bet_modal.attributes('-topmost', True)
 
         # UI Elements
         tk.Label(self.bet_modal, text="Place your bet: ", font=("Arial", 12)).pack(pady=10)
@@ -767,7 +886,6 @@ class GameRoom(tk.Frame):
         # Entry for bet amount
         self.bet_amount_entry = tk.Entry(self.bet_modal, font=("Arial", 12))
         self.bet_amount_entry.pack(pady=5)
-        self.bet_amount_entry.focus_set() # Focus the cursor here
 
         # Bind Enter key to submit
         self.bet_amount_entry.bind("<Return>", lambda e: self._on_place_bet())
@@ -775,9 +893,27 @@ class GameRoom(tk.Frame):
         tk.Button(self.bet_modal, text="PLACE BET", bg="#4CAF50", fg="white",
                   command=self._on_place_bet).pack(pady=10)
         
-        #disable closing the modal to force bet
-        self.bet_modal.protocol("WM_DELETE_WINDOW", lambda: None)
+        # Force focus after everything is set up - use multiple methods for reliability
+        self.bet_modal.lift()
+        self.bet_modal.focus_force()
         
+        # Set focus to entry with a delay to ensure window is fully ready
+        def set_focus():
+            try:
+                self.bet_amount_entry.focus_set()
+                self.bet_amount_entry.icursor(tk.END)  # Position cursor at end
+            except:
+                pass
+
+        def force_focus(event):
+            self.controller.root.focus_force()
+            self.bet_amount_entry.focus_force()
+
+        self.bet_modal.bind("<Button-1>", force_focus)  # Also set focus on click
+        self.bet_amount_entry.bind("<Button-1>", force_focus)
+    
+        self.bet_modal.after(100, set_focus)  # Slightly longer delay for borderless windows
+    
     def open_game_end_modal(self):
         #create a modal dialog for game end
         if self.game_end_modal:
@@ -822,7 +958,7 @@ class GameRoom(tk.Frame):
             self.open_game_end_modal()
         credits,winnings = result_str.split(";")
         self.game_end_credits.config(text=f"Credits: {credits}")
-        self.game_end_winnings.config(text=f"Winnings: {winnings}")
+        self.game_end_winnings.config(text=(f"Winnings: {winnings}" if int(winnings) > 0 else f"Loss: {int(winnings)}"))
         self.controller.player_info.update_data(credits=credits)
 
     def _on_place_bet(self):
@@ -842,7 +978,7 @@ class GameRoom(tk.Frame):
         for player in gameroom_players.split(":"):
             if not player:
                 continue
-            _,nick,status,__ = player.split(";",3)
+            _,nick,status,__ = player.split(";", 3)
             if nick == self.controller.player_info.raw_nick:
                 self.player_ready_status = (status == '1')
                 #update button text
@@ -1055,24 +1191,41 @@ def draw_vector_card(canvas, x, y, w, h, code):
 # MAIN ENTRY POINT
 # ==============================================================================
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        # Default for quick testing if args missing
-        print("Usage: python client.py <IP> <PORT>")
-        print("Using defaults: 127.0.0.1 8888")
-        server_ip = "127.0.0.1"
-        server_port = 10000
-    else:
-        server_ip = sys.argv[1]
-        try:
-            server_port = int(sys.argv[2])
-        except ValueError:
-            print("Error: Port must be an integer.")
-            sys.exit(1)
+    # 1. Initialize the parser
+    parser = argparse.ArgumentParser(description="Start the blackjack Client.")
 
+    # 2. Define arguments
+    # nargs='?' means the argument is optional.
+    parser.add_argument("host", nargs="?", default="127.0.0.1", 
+                        help="The Server IP address (default: 127.0.0.1)")
+    
+    parser.add_argument("port", nargs="?", type=int, default=10000, 
+                        help="The Server Port (default: 10000)")
+
+    # 3. Parse arguments
+    args = parser.parse_args()
+
+    # 4. specific logical validation (checking port range)
+    if not (1 <= args.port <= 65535):
+        print(f"Error: Port must be between 1 and 65535. Received: {args.port}")
+        sys.exit(1)
+
+    # chacking ip address validity
+    try:
+        ipaddress.ip_address(args.host)
+    except ValueError:
+        print(f"Error: Invalid IP address format: {args.host}")
+        sys.exit(1)
+
+    print(f"Configuration loaded: {args.host}:{args.port}")
+
+    
     root = tk.Tk()
-    app = ChatGUI(root, server_ip, server_port)
+    
+    # Note: We access the values via args.host and args.port
+    app = BlackJackGui(root, args.host, args.port)
     
     try:
         root.mainloop()
     except KeyboardInterrupt:
-        print("Client shutting down...")
+        print("\nClient shutting down...")

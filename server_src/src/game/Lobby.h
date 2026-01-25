@@ -1,3 +1,13 @@
+/**
+ * Server for blackjack
+ * Author: Marek Manzel
+ * 
+ * Lobby.h - Main game lobby management system
+ * Manages player connections, nickname validation, room assignments, and
+ * coordinates between the network layer and individual game rooms.
+ * Handles player state changes and message routing.
+ */
+
 #ifndef LOBBY_H
 #define LOBBY_H
 

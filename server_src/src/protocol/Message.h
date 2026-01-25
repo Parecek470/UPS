@@ -1,3 +1,12 @@
+/**
+ * Server for blackjack
+ * Author: Marek Manzel
+ * 
+ * Message.h - Protocol message structure definition
+ * Defines the Message structure used to represent parsed client commands
+ * with a command string, arguments vector, and validity flag.
+ */
+
 #ifndef MESSAGE_H
 #define MESSAGE_H
 

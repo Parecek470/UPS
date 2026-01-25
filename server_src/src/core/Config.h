@@ -1,3 +1,12 @@
+/**
+ * Server for blackjack
+ * Author: Marek Manzel
+ * 
+ * Config.h - Configuration structure for the blackjack server
+ * Contains server configuration parameters including IP address, port, 
+ * number of game rooms, and maximum players allowed.
+ */
+
 #ifndef CONFIG_H
 #define CONFIG_H
 

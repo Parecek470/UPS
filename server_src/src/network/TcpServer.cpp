@@ -213,7 +213,15 @@ void TcpServer::sendMessage(int fd, std::string command, std::string args)
     }
 
     // 3. Send data using the standard BSD socket call
-    ssize_t bytesSent = send(fd, finalMessage.c_str(), finalMessage.size(), 0);
+    ssize_t bytesSent = -1;
+    try
+    {
+        bytesSent = send(fd, finalMessage.c_str(), finalMessage.size(), 0);
+    }
+    catch (const std::exception &e)
+    {
+        Logger::error("Exception during send to FD " + std::to_string(fd) + ": " + e.what());
+    }
 
     if (bytesSent < 0)
     {

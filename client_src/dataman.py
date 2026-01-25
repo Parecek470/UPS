@@ -1,4 +1,6 @@
-# protocol.py
+"""BlackJack Client Application - Data management and validation Layer"""
+"""author: Marek Manzel"""
+""" responsibilities: Protocol logic, message validation, ACK tracking """
 import time
 
 class ProtocolController:
@@ -21,8 +23,9 @@ class ProtocolController:
         self.MAX_RETRIES = 3
 
         # connection to server variables
-        self.last_message_time = 0.0
+        self.last_message_time = time.time()
         self.invalid_msg_count = 0
+        self.connected = False
 
     def set_network(self, network_layer):
         self.network = network_layer
@@ -75,7 +78,7 @@ class ProtocolController:
     
     def send_gamestate_request(self):
         payload = "BJ:REC__GAM"
-        self._send_with_ack_logic(payload)
+        self.send_fire_and_forget(payload)
         print(f"Sending: {payload}")
 
     def send_fire_and_forget(self, payload): 
@@ -90,6 +93,8 @@ class ProtocolController:
         
         if self.network:
             self.network.send_message(payload)
+
+    
 
     def on_network_message(self, raw_msg):
         # 1. Validate Protocol
@@ -124,16 +129,18 @@ class ProtocolController:
                 self.network.send_message(pong_msg)
         elif cmd == "mark_offline":
             self.invalid_msg_count += 1
+            self.connected = False
         else:
             self._notify_gui(cmd , args)
 
     def on_tick(self):
-        if self.last_message_time > 0 and (time.time() - self.last_message_time) > 10:
+        if self.last_message_time > 0 and (time.time() - self.last_message_time) > 10: ## and self.connected) was removed because it prevented repetitive reconnection attempts
             print("DEBUG: Connection timeout detected, marking for reconnection...")
             self._notify_gui("mark_offline", None)
             # Don't reconnect directly from the network thread - signal it to stop instead
             self.network._running = False
             self.last_message_time = time.time() 
+            self.connected = False
             return
             
 

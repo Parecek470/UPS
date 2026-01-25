@@ -1,3 +1,11 @@
+/**
+ * Server for blackjack
+ * Author: Marek Manzel
+ *
+ * Utils.h - Utility functions for the blackjack server
+ * Contains helper methods for nickname validation and string manipulation.
+ */
+
 #ifndef UTILS_H
 #define UTILS_H
 
@@ -8,11 +16,11 @@
 class Utils
 {
 public:
-    // Validates a nickname longer than 3 and less than 16 characters
+    // Validates a nickname longer than 3 and less than 10 characters
     // and only containing alphanumeric characters, underscores, or hyphens
     static bool validateNickname(const std::string &nickname)
     {
-        if (nickname.length() < 3 || nickname.length() > 16)
+        if (nickname.length() < 3 || nickname.length() > 10)
             return false;
 
         for (char c : nickname)

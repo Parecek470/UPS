@@ -1,7 +1,18 @@
+/**
+ * Server for blackjack
+ * Author: Marek Manzel
+ *
+ * Parser.h - Protocol message parser for client commands
+ * Parses incoming client messages according to the blackjack protocol format.
+ * Validates message structure, extracts commands and arguments, and handles
+ * protocol-specific formatting requirements.
+ */
+
 #ifndef PARSER_H
 #define PARSER_H
 
 #include "Message.h"
+#include <core/Utils.h>
 #include <sstream>
 #include <algorithm>
 
@@ -17,15 +28,8 @@ public:
             return msg;
         }
 
-        // 2. Tokenize the string by delimiter ':'
-        std::vector<std::string> tokens;
-        std::stringstream ss(rawLine);
-        std::string segment;
-
-        while (std::getline(ss, segment, ':'))
-        {
-            tokens.push_back(segment);
-        }
+        // Tokenize the string by delimiter ':'
+        std::vector<std::string> tokens = Utils::splitString(rawLine, ':');
 
         // Validation: Must have Header and Command
         if (tokens.size() < 2)
@@ -33,33 +37,33 @@ public:
             return msg;
         }
 
-        // 4. Validation: First token must be "BJ"
+        // First token must be "BJ"
         if (tokens[0] != "BJ")
         {
             return msg;
         }
 
-        // 5. Validation: Second token (Command) must be length 8
+        // Second token (Command) must be length 8, i first thought messages will be fixed length, now its not mendatory but still prevents when someone sends garbage
         std::string rawCommand = tokens[1];
         if (rawCommand.length() != 8)
         {
             return msg;
         }
 
-        // 6. Process Command: Convert to Uppercase
+        // Convert to Uppercase
         std::transform(rawCommand.begin(), rawCommand.end(), rawCommand.begin(),
                        [](unsigned char c)
                        { return std::toupper(c); });
         msg.command = rawCommand;
 
-        // 7. Process Arguments: Add remaining tokens to args
-        // Start from index 2 (skipping BJ and Command)
+        // Add remaining tokens to args
+        // skipping BJ and Command
         for (size_t i = 2; i < tokens.size(); ++i)
         {
             msg.args.push_back(tokens[i]);
         }
 
-        // 8. If we reached here, the message is valid
+        // If we reached here, the message is valid
         msg.valid = true;
         return msg;
     }
