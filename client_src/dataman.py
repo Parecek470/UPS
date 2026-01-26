@@ -25,6 +25,7 @@ class ProtocolController:
         # connection to server variables
         self.last_message_time = time.time()
         self.invalid_msg_count = 0
+        self.reconnect_atmpt = 0
         self.connected = False
 
     def set_network(self, network_layer):
@@ -124,6 +125,7 @@ class ProtocolController:
             self.pending_msg = None
             self._notify_gui(cmd, args)
         elif cmd == "PING____":
+            self.reconnect_atmpt = 0
             pong_msg = "BJ:PONG____"
             if self.network:
                 self.network.send_message(pong_msg)
@@ -134,6 +136,9 @@ class ProtocolController:
             self._notify_gui(cmd , args)
 
     def on_tick(self):
+        if self.reconnect_atmpt > 5:
+            self._notify_gui("close_cli","")
+
         if self.last_message_time > 0 and (time.time() - self.last_message_time) > 10: ## and self.connected) was removed because it prevented repetitive reconnection attempts
             print("DEBUG: Connection timeout detected, marking for reconnection...")
             self._notify_gui("mark_offline", None)
@@ -141,6 +146,7 @@ class ProtocolController:
             self.network._running = False
             self.last_message_time = time.time() 
             self.connected = False
+            self.reconnect_atmpt+=1
             return
             
 
