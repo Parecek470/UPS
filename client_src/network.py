@@ -36,7 +36,7 @@ class NetworkClient:
             # Register socket for READ and WRITE events
             self._selector.register(
                 self._socket, 
-                selectors.EVENT_READ | selectors.EVENT_WRITE, 
+                selectors.EVENT_READ, 
                 data=None
             )
             
@@ -93,14 +93,13 @@ class NetworkClient:
                     self.tick_callback()
 
                 # 2. Select: Wait for I/O events with a short timeout
+                self._handle_write()
                 # Timeout ensures we don't block forever and can process the send_queue/timers
                 events = self._selector.select(timeout=0.1)
 
                 for key, mask in events:
                     if mask & selectors.EVENT_READ:
                         self._handle_read()
-                    if mask & selectors.EVENT_WRITE:
-                        self._handle_write()
             except Exception as e:
                 self._close_connection(f"Event loop error: {e}")
 
