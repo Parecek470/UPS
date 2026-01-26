@@ -329,6 +329,8 @@ class BlackJackGui:
         self.disconnection_modal.deiconify()
         self.disconnection_modal.attributes('-topmost', True)
         self.disconnection_modal.protocol("WM_DELETE_WINDOW", self._on_close_app)
+    
+
 
 
     def hide_disconnection_modal(self):
@@ -345,6 +347,7 @@ class BlackJackGui:
             self.hide_disconnection_modal()  # Hide disconnection modal when back online
             self.open_login_modal()
         elif cmd == "ACK__NIC":
+            self.handle_leave_room()
             if self.login_modal:
                 self.login_modal.destroy()
                 self.login_modal = None
@@ -422,6 +425,10 @@ class BlackJackGui:
             self.player_info.update_data(status="Offline")
             if "GameRoom" in self.frames and self.player_info.raw_nick in self.frames["GameRoom"].player_cards:
                 self.frames["GameRoom"].player_cards[self.player_info.raw_nick].update_data(status="Disconnected")
+        elif cmd == "close_cli":
+            self.show_warning("Reconnect failed.", "Client will close, try restarting manually")
+            self._on_close_app(force=True)
+
             
             
             
@@ -459,7 +466,7 @@ class PlayerInfo(tk.Frame):
         self.raw_status = "Offline"
 
         # Labels (Display)
-        self.lbl_nick = tk.Label(self, text=f"Nick: {"???" if not self.raw_nick else self.raw_nick}", bg="#333", fg="white", font=("Arial", 10, "bold"))
+        self.lbl_nick = tk.Label(self, text=f"Nick: {'???' if not self.raw_nick else self.raw_nick}", bg="#333", fg="white", font=("Arial", 10, "bold"))
         self.lbl_credits = tk.Label(self, text=f"Credits: {self.raw_credits}", bg="#333", fg="#FFD700", font=("Arial", 10))
         self.lbl_status = tk.Label(self, text=f"Status: {self.raw_status}", bg="#333", fg="#aaa", font=("Arial", 10, "italic"))
 
