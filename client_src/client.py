@@ -249,6 +249,7 @@ class BlackJackGui:
                     if success:
                         self.protocol.set_network(new_network)
                         self.network = new_network  # Update our reference
+                        self.protocol.reconnect_atmpt +=1
                         print("DEBUG: Reconnection attempt...")
                     else:
                         print(f"DEBUG: Reconnection failed: {msg}")
@@ -426,7 +427,7 @@ class BlackJackGui:
             if "GameRoom" in self.frames and self.player_info.raw_nick in self.frames["GameRoom"].player_cards:
                 self.frames["GameRoom"].player_cards[self.player_info.raw_nick].update_data(status="Disconnected")
         elif cmd == "close_cli":
-            self.show_warning("Reconnect failed.", "Client will close, try restarting manually")
+            self.show_warning("Reconnect failed.", f"Reconnect terminated: {args}")
             self._on_close_app(force=True)
 
             

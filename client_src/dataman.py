@@ -104,7 +104,7 @@ class ProtocolController:
             print(f"DEBUG: Discarding invalid protocol message: {raw_msg}")
             if self.invalid_msg_count > 3:
                 print("DEBUG: Too many invalid messages, disconnecting...")
-                self._notify_gui("mark_offline", None)
+                self._notify_gui("close_cli", "Detected invalid messages from server")
                 if self.network:
                     self.network._running = False
             return
@@ -137,7 +137,7 @@ class ProtocolController:
 
     def on_tick(self):
         if self.reconnect_atmpt > 5:
-            self._notify_gui("close_cli","")
+            self._notify_gui("close_cli","Ran out of reconnection attempts.")
 
         if self.last_message_time > 0 and (time.time() - self.last_message_time) > 10: ## and self.connected) was removed because it prevented repetitive reconnection attempts
             print("DEBUG: Connection timeout detected, marking for reconnection...")

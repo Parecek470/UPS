@@ -199,6 +199,11 @@ void Lobby::handle(std::shared_ptr<Player> player, const Message &msg)
             return;
         }
 
+        if(player->getNickname() != msg.args[0]){
+            handleInvalidMessage(player);
+            server.sendMessage(player->getFd(), "INV_MESS", "Already logged in");
+        }
+
         // check if nickname is valid
         if (Utils::validateNickname(msg.args[0]))
         {
